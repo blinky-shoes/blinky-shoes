@@ -32,8 +32,10 @@ const uint8_t PROGMEM rose[] = {255,0,200};
 #define BRIGHTNESS 0.5 
 
 #define N_LEDS 24 // number of LEDs in left and right strips
+#define LED_BRIGHTNESS 255 // 0-255
 #define MAXSTEPS 6 // Process (up to) this many concurrent steps
 #define TIMESTEP_MICROSECONDS 5000 // waiting time between animation steps and sensor readings
+#define TIMESTEP_GAME_OF_LIFE 2500 // miliseconds between game of life ticks
 
 #define MODEADDRESS 100 // Byte address in EEPROM to use for the mode counter (0-1023).
 #define SWITCHADDRESS 101 // Byte address in EEPROM to use for the mode switch flag (0-1023).
@@ -48,6 +50,12 @@ const uint8_t PROGMEM rose[] = {255,0,200};
 
 #define V_REF 3.3
 #define G_PER_V 3.3 // conversion factor between volts and g-force
+
+#define LIGHT_OFF 0
+#define LIGHT_GAME_OF_LIFE 4
+
+#define MODE_ATTRACT 0
+#define MODE_WALKING 1
 
 #define FORWARD 0
 #define BACKWARD 1
@@ -75,11 +83,15 @@ elapsedMillis_bs24 timer;
 elapsedMillis_bs24 mode_switch_timer;
 
 extern const uint8_t PROGMEM gamma[]; // Gamma correction table for LED brightness (defined at end of code)
+extern const uint8_t PROGMEM SINES[]; // Fast 0-255 sine lookup table (defined at end of code)
 
 int
   stepMag[MAXSTEPS], // Magnitude of steps
   stepX[MAXSTEPS], // Position of 'step wave' along strip
-  mag[N_LEDS]; // Brightness buffer (one side of shoe)
+  mag[N_LEDS], // Brightness buffer (one side of shoe)
+  light_state,
+  mode_state,
+  mode_state_next;
 
 uint8_t
   triggerState = READY,
@@ -105,6 +117,10 @@ float
   jerkMag, // sum of squares of xJerk, yJerk, and zJerk
   maxJerk;
 
+unsigned long next_game_of_life_tick_time;
+boolean game_of_life_state[N_LEDS];
+boolean game_of_life_state_old[N_LEDS];
+const boolean GAME_OF_LIFE_EIGHTEEN[] = {false, true, false, false, true, false, false, false};
 
 // Define program modes here. Each mode specifies a palette of four colors.
 void setPalette(uint8_t modevalue) {
@@ -214,25 +230,46 @@ void setup() {
   readAccel();
 }
 
-void loop() {
-  uint8_t i, j, r, g, b;
-  int mx1, m;
-  long level;
-
-  
-//  for (i=0; i<MAXSTEPS; i++) {
-//    Serial.print(stepMag[i]);
-//    Serial.print(" ");
-//  }
-//  Serial.print("\n");
-  
+void loop() {  
   if (modeSwitchTimeExceeded == false) {
     if (mode_switch_timer > MODE_SWITCH_TIME) { // if it has been a long enough time since the program started...
       modeSwitchTimeExceeded = true;
       EEPROM.write(SWITCHADDRESS, DONT_SWITCH_MODES); // change the mode switch so that we don't switch modes next time
     }
-  }    
- 
+  }
+
+  stepCalculation();
+  stripL.show();
+  stripR.show();
+  
+  delayMicroseconds(TIMESTEP_MICROSECONDS);  
+}
+
+void displayPalette() { // All 4 colors for the current mode are displayed using this function.
+  uint8_t r, g, b, i;
+  for (i=0; i<N_LEDS; i++) {
+    r = rValue(i*1000/N_LEDS);
+    g = gValue(i*1000/N_LEDS);
+    b = bValue(i*1000/N_LEDS);
+    stripL.setPixelColor(i, r, g, b);
+    stripR.setPixelColor(i, r, g, b);
+  }
+  stripL.show();
+  stripR.show();
+  delay(DISPLAY_PALETTE_TIME);
+  for(i=0; i<N_LEDS; i++) {
+    stripL.setPixelColor(i, 0, 0, 0);
+    stripR.setPixelColor(i, 0, 0, 0);
+  }
+  stripL.show();
+  stripR.show();
+}
+
+void stepCalculation() {
+  uint8_t i, j, r, g, b;
+  int mx1, m;
+  long level;
+
   readAccel(); // read the acceleration and calculate the jerk
   
   if (constMode == false) { // the following code is for the non-constant modes
@@ -329,30 +366,105 @@ void loop() {
     stripL.setPixelColor(i, r, g, b);
     stripR.setPixelColor(i, r, g, b);
   }
-  stripL.show();
-  stripR.show();
-  delayMicroseconds(TIMESTEP_MICROSECONDS);  
 }
 
+void serviceModeStateMachine() {
+  switch (mode_state) {
+    case MODE_ATTRACT:
+      light_state = LIGHT_GAME_OF_LIFE;
+      break;
+    
+    case MODE_WALKING:
+      //serviceBounceStateMachine();
+      if (mode_state_next == MODE_ATTRACT) {
+        resetGameOfLife();
+      } 
+      break;
+  }
+  mode_state = mode_state_next;
+}
 
-void displayPalette() { // All 4 colors for the current mode are displayed using this function.
-  uint8_t r, g, b, i;
-  for (i=0; i<N_LEDS; i++) {
-    r = rValue(i*1000/N_LEDS);
-    g = gValue(i*1000/N_LEDS);
-    b = bValue(i*1000/N_LEDS);
-    stripL.setPixelColor(i, r, g, b);
-    stripR.setPixelColor(i, r, g, b);
+void serviceLightStateMachine() {
+  uint8_t i, j, brightness;
+  j = pgm_read_byte(&SINES[(timer / 64) % 255]);
+  switch (light_state) {
+    case LIGHT_OFF:
+      for(i=0; i<N_LEDS; i++) {
+        stripL.setPixelColor(i, 0, 0, 0);
+        stripR.setPixelColor(i, 0, 0, 0);
+      }
+      break;
+           
+    case LIGHT_GAME_OF_LIFE:
+      serviceGameOfLife();
+      float pct_remaining_in_step = ((float) min((unsigned long) next_game_of_life_tick_time - timer, TIMESTEP_GAME_OF_LIFE)) / TIMESTEP_GAME_OF_LIFE;
+      
+      stripL.setBrightness(LED_BRIGHTNESS);
+      stripR.setBrightness(LED_BRIGHTNESS);
+      
+      for(i=0; i<N_LEDS; i++) {
+        uint32_t c = Wheel(((i * 256 / stripL.numPixels()) + j) & 255);
+        uint8_t r, g, b, dim;
+        r = (uint8_t)(c >> 16);
+        g = (uint8_t)(c >>  8);
+        b = (uint8_t)c;
+        
+        if (game_of_life_state_old[i] && !game_of_life_state[i]) {
+          // * 127 to only scale through half the sine cycle
+          // + 64 offset to get a cosine that starts from 1 instead of a sine from 0
+          dim = 255 - pgm_read_byte(&SINES[(int) (pct_remaining_in_step * 127 + 64)]);
+        } else if (!game_of_life_state_old[i] && game_of_life_state[i]) {
+          dim = pgm_read_byte(&SINES[(int) (pct_remaining_in_step * 127 + 64)]);
+        } else if (!game_of_life_state_old[i] && !game_of_life_state[i]) {
+          dim = 0;
+        } else {
+          dim = 255;
+        }
+        r = (uint16_t) (r * dim) >> 8;
+        g = (uint16_t) (g * dim) >> 8;
+        b = (uint16_t) (b * dim) >> 8;
+          
+        stripL.setPixelColor(i, r, g, b);
+        stripR.setPixelColor(i, r, g, b);
+      }
+      break;
   }
+  
   stripL.show();
   stripR.show();
-  delay(DISPLAY_PALETTE_TIME);
-  for(i=0; i<N_LEDS; i++) {
-    stripL.setPixelColor(i, 0, 0, 0);
-    stripR.setPixelColor(i, 0, 0, 0);
+}
+
+void resetGameOfLife() {
+  next_game_of_life_tick_time = timer + TIMESTEP_GAME_OF_LIFE;
+  for (int i = 0; i < N_LEDS; i = i + 1) {
+    game_of_life_state_old[i] = true;
+    game_of_life_state[i] = (random(0,6) < 1);
   }
-  stripL.show();
-  stripR.show();
+}
+
+void serviceGameOfLife() {
+  if (timer > next_game_of_life_tick_time) {
+    next_game_of_life_tick_time = next_game_of_life_tick_time + TIMESTEP_GAME_OF_LIFE;
+    // update game of life
+    for (int i = 0; i < N_LEDS; i = i + 1) {
+      // TODO do this with a more efficient memory copy
+      game_of_life_state_old[i] = game_of_life_state[i];
+    }
+
+    // TODO REPLACE MULTIPLICATION WITH BITSHIFTING >>
+    game_of_life_state[0] = GAME_OF_LIFE_EIGHTEEN[
+        game_of_life_state_old[1] * 2 +
+        game_of_life_state_old[2]];
+    for (int i = 1; i < N_LEDS - 1; i = i + 1) {
+      game_of_life_state[i] = GAME_OF_LIFE_EIGHTEEN[
+        game_of_life_state_old[i-1] * 4 +
+        game_of_life_state_old[i] * 2 +
+        game_of_life_state_old[i+1]];
+    }
+    game_of_life_state[N_LEDS - 1] = GAME_OF_LIFE_EIGHTEEN[
+        game_of_life_state_old[N_LEDS - 2] * 4 +
+        game_of_life_state_old[N_LEDS - 1] * 2];
+  }
 }
 
 void readAccel() { // helper function to read the accelerometer and calculate the jerk.
@@ -376,6 +488,20 @@ void readAccel() { // helper function to read the accelerometer and calculate th
 
 long getMag(float jerk) { // this turns a jerk value into a pixel magnitude using a predefined multiplier and bounds.
   return max(min(jerk*MULTIPLIER,MAX_STEP_MAG),MIN_STEP_MAG);
+}
+
+// Input a value 0 to 255 to get a color value.
+// The colours are a transition r - g - b - back to r.
+uint32_t Wheel(byte WheelPos) {
+  if(WheelPos < 85) {
+   return stripL.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
+  } else if(WheelPos < 170) {
+   WheelPos -= 85;
+   return stripL.Color(255 - WheelPos * 3, 0, WheelPos * 3);
+  } else {
+   WheelPos -= 170;
+   return stripL.Color(0, WheelPos * 3, 255 - WheelPos * 3);
+  }
 }
 
 // The following three helper functions do the math to smoothly change between any
@@ -444,3 +570,20 @@ const uint8_t PROGMEM gamma[] = { // gamma correction table
   144,146,148,150,152,154,156,158,160,162,164,167,169,171,173,175,
   177,180,182,184,186,189,191,193,196,198,200,203,205,208,210,213,
   215,218,220,223,225,228,231,233,236,239,241,244,247,249,252,255 };
+
+const uint8_t PROGMEM SINES[] = {
+  127, 130, 133, 136, 139, 142, 145, 148, 151, 154, 157, 161, 164, 166, 169, 172, 175, 
+  178, 181, 184, 187, 189, 192, 195, 197, 200, 202, 205, 207, 210, 212, 214, 217, 219, 
+  221, 223, 225, 227, 229, 231, 232, 234, 236, 237, 239, 240, 242, 243, 244, 245, 246, 
+  247, 248, 249, 250, 251, 251, 252, 252, 253, 253, 253, 253, 253, 253, 253, 253, 253, 
+  253, 252, 252, 251, 251, 250, 249, 249, 248, 247, 246, 245, 243, 242, 241, 239, 238, 
+  236, 235, 233, 231, 230, 228, 226, 224, 222, 220, 218, 215, 213, 211, 209, 206, 204, 
+  201, 199, 196, 193, 191, 188, 185, 182, 180, 177, 174, 171, 168, 165, 162, 159, 156, 
+  153, 150, 147, 144, 141, 137, 134, 131, 128, 126, 123, 120, 117, 113, 110, 107, 104, 
+  101, 98, 95, 92, 89, 86, 83, 80, 77, 74, 72, 69, 66, 63, 61, 58, 55, 53, 50, 48, 45, 
+  43, 41, 39, 36, 34, 32, 30, 28, 26, 24, 23, 21, 19, 18, 16, 15, 13, 12, 11, 9, 8, 7, 
+  6, 5, 5, 4, 3, 3, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 3, 4, 5, 6, 7, 8, 9, 
+  10, 11, 12, 14, 15, 17, 18, 20, 22, 23, 25, 27, 29, 31, 33, 35, 37, 40, 42, 44, 47, 
+  49, 52, 54, 57, 59, 62, 65, 67, 70, 73, 76, 79, 82, 85, 88, 90, 93, 97, 100, 103, 
+  106, 109, 112, 115, 118, 121, 124, 127};
+
