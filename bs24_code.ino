@@ -255,9 +255,6 @@ void loop() {
   serviceModeStateMachine();
   serviceLightStateMachine();
 
-  stripL.show();
-  stripR.show();
-  
   delayMicroseconds(TIMESTEP_MICROSECONDS);  
 }
 
