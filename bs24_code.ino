@@ -9,8 +9,8 @@
 #include <EEPROM.h>
 
 // List of program mode names. You can add new modes here. Modes are defined in function setPalette().
-typedef enum {MODE_MLPONY, MODE_BURN, MODE_WONKA, MODE_PRINPEACH, MODE_MOJITO, MODE_SKYWLKR, MODE_CANDY, MODE_TMNT, MODE_CONST} progmode;
-#define NUMBEROFMODES 9
+typedef enum {MODE_MLPONY, MODE_BURN, MODE_WONKA, MODE_PRINPEACH, MODE_MOJITO, MODE_SKYWLKR, MODE_CANDY, MODE_TMNT, MODE_CONST, MODE_RAINBOW} progmode;
+#define NUMBEROFMODES 10
 
 // User-defined colors. Add more if desired
 const uint8_t PROGMEM black[] = {0,0,0};
@@ -53,6 +53,7 @@ const uint8_t PROGMEM rose[] = {255,0,200};
 
 #define LIGHT_OFF 0
 #define LIGHT_DONT_WRITE 1
+#define LIGHT_MAG_WAVES 2
 #define LIGHT_GAME_OF_LIFE 4
 
 #define MODE_ATTRACT 0
@@ -81,7 +82,7 @@ Adafruit_NeoPixel_bs24 stripL = Adafruit_NeoPixel_bs24(N_LEDS, LED_PIN_L, NEO_GR
 Adafruit_NeoPixel_bs24 stripR = Adafruit_NeoPixel_bs24(N_LEDS, LED_PIN_R, NEO_GRB + NEO_KHZ800);
 
 elapsedMillis_bs24 timer;
-elapsedMillis_bs24 mode_switch_timer;
+elapsedMillis_bs24 step_timer;
 
 extern const uint8_t PROGMEM gamma[]; // Gamma correction table for LED brightness (defined at end of code)
 extern const uint8_t PROGMEM SINES[]; // Fast 0-255 sine lookup table (defined at end of code)
@@ -106,7 +107,8 @@ uint8_t
 boolean
   modeSwitchTimeExceeded = false,
   stepDir[MAXSTEPS],
-  constMode = false;
+  constMode = false,
+  rainbowMode = false;
 
 float
   x, // current x-acceleration
@@ -184,7 +186,14 @@ void setPalette(uint8_t modevalue) {
       memcpy_P(color2, &cyan, 3);
       memcpy_P(color3, &magenta, 3);
       constMode = true;
-      break;        
+      break;
+    case MODE_RAINBOW:
+      memcpy_P(color0, &black, 3);
+      memcpy_P(color1, &white, 3);
+      memcpy_P(color2, &black, 3);
+      memcpy_P(color3, &white, 3);
+      rainbowMode = true;
+      break;
   }
 }
 
@@ -194,7 +203,7 @@ void setup() {
   boolean modeSwitch = EEPROM.read(SWITCHADDRESS); // read mode switch from EEPROM to decide whether to switch modes
 
   EEPROM.write(SWITCHADDRESS, SWITCH_MODES); // write to EEPROM so that we will switch modes next time (if power is interrupted before we change this)
-  mode_switch_timer = 0; // when this counter reaches MODE_SWITCH_TIME, we will change the mode switch so that we don't switch modes
+  timer = 0; // when this counter reaches MODE_SWITCH_TIME, we will change the mode switch so that we don't switch modes
   
   modevalue = EEPROM.read(MODEADDRESS); // read mode counter from EEPROM (non-volatile memory)
     
@@ -239,7 +248,7 @@ void setup() {
 
 void loop() {  
   if (modeSwitchTimeExceeded == false) {
-    if (mode_switch_timer > MODE_SWITCH_TIME) { // if it has been a long enough time since the program started...
+    if (timer > MODE_SWITCH_TIME) { // if it has been a long enough time since the program started...
       modeSwitchTimeExceeded = true;
       EEPROM.write(SWITCHADDRESS, DONT_SWITCH_MODES); // change the mode switch so that we don't switch modes next time
     }
@@ -276,9 +285,8 @@ void displayPalette() { // All 4 colors for the current mode are displayed using
 }
 
 void stepCalculation() {
-  uint8_t i, j, r, g, b;
+  uint8_t i, j;
   int mx1, m;
-  long level;
 
   readAccel(); // read the acceleration and calculate the jerk
   
@@ -286,14 +294,14 @@ void stepCalculation() {
   
   switch(triggerState) { // depending on the trigger state, we have different behavior:
     case READY:
-      if ((jerkMag > TRIGGER_LEVEL) && (timer > MIN_STEP_TIME)) { // trigger a step if the jerk exceeds the trigger level and there is enough time since the last step.
+      if ((jerkMag > TRIGGER_LEVEL) && (step_timer > MIN_STEP_TIME)) { // trigger a step if the jerk exceeds the trigger level and there is enough time since the last step.
         maxJerk = jerkMag; // keep a running tally of the maximum jerk encountered during this step.
         stepMag[stepNum] = getMag(maxJerk); // set the step magnitude according to the maximum jerk (this is updated if maxJerk changes).
         triggerState = TRIGGERED;
         if (xJerk > 0) stepDir[stepNum] = FORWARD; // if the vertical jerk is upwards, the animation moves forward.
         if (xJerk < 0) stepDir[stepNum] = BACKWARD; // if the vertical jerk is downwards, the animation moves backward.
         stepX[stepNum] = -80; // the wave starts just out of range.
-        timer = 0; // reset the timer to prevent steps from being triggered too close to each other.
+        step_timer = 0; // reset the timer to prevent steps from being triggered too close to each other.
         break;
       }
       break; // if the jerk does not exceed the trigger level or there hasn't been enough time, do nothing.
@@ -368,16 +376,6 @@ void stepCalculation() {
       if (mag[i] >= 768) mag[i] -= 768;
     }
   }
-
-  // Now the grayscale magnitude buffer is remapped to color for the LEDs. The colors are drawn from the color palette defined in the setPalette function.
-  for(i=0; i<N_LEDS; i++) { // For each LED...
-    level = mag[i]; // Pixel magnitude (brightness)
-    r = rValue(level); // use helper functions rValue, gValue, and bValue to compute colors from the pixel magnitude
-    g = gValue(level);
-    b = bValue(level);
-    stripL.setPixelColor(i, r, g, b);
-    stripR.setPixelColor(i, r, g, b);
-  }
 }
 
 void serviceModeStateMachine() {
@@ -387,7 +385,7 @@ void serviceModeStateMachine() {
       break;
     
     case MODE_WALKING:
-      light_state = LIGHT_DONT_WRITE;
+      light_state = LIGHT_MAG_WAVES;
       if (timer > next_exit_walking_mode_time) {
         mode_state_next = MODE_ATTRACT;
       }
@@ -400,10 +398,36 @@ void serviceModeStateMachine() {
 }
 
 void serviceLightStateMachine() {
-  uint8_t i, j, brightness;
+  uint8_t i, j;
+  uint8_t r, g, b, dim;
+  long level;
   j = pgm_read_byte(&SINES[(timer / 64) % 255]);
   switch (light_state) {
     case LIGHT_DONT_WRITE:
+      break;
+
+    case LIGHT_MAG_WAVES:
+      // Now the grayscale magnitude buffer is remapped to color for the LEDs. The colors are drawn from the color palette defined in the setPalette function.
+      for(i=0; i<N_LEDS; i++) { // For each LED...
+        level = mag[i]; // Pixel magnitude (brightness)
+
+        if (rainbowMode == false) {
+          r = rValue(level); // use helper functions rValue, gValue, and bValue to compute colors from the pixel magnitude
+          g = gValue(level);
+          b = bValue(level);
+        } else {
+          uint32_t c = Wheel(((i * 256 / stripL.numPixels()) + j) & 255);
+          r = (uint8_t)(c >> 16);
+          g = (uint8_t)(c >>  8);
+          b = (uint8_t)c;
+          
+          r = (r * min(mag[i], 255)) >> 8;
+          g = (g * min(mag[i], 255)) >> 8;
+          b = (b * min(mag[i], 255)) >> 8;      
+        }
+        stripL.setPixelColor(i, r, g, b);
+        stripR.setPixelColor(i, r, g, b);
+      }
       break;
     
     case LIGHT_OFF:
@@ -416,17 +440,8 @@ void serviceLightStateMachine() {
     case LIGHT_GAME_OF_LIFE:
       serviceGameOfLife();
       float pct_remaining_in_step = ((float) min((unsigned long) next_game_of_life_tick_time - timer, TIMESTEP_GAME_OF_LIFE)) / TIMESTEP_GAME_OF_LIFE;
-      
-      stripL.setBrightness(LED_BRIGHTNESS);
-      stripR.setBrightness(LED_BRIGHTNESS);
-      
+
       for(i=0; i<N_LEDS; i++) {
-        uint32_t c = Wheel(((i * 256 / stripL.numPixels()) + j) & 255);
-        uint8_t r, g, b, dim;
-        r = (uint8_t)(c >> 16);
-        g = (uint8_t)(c >>  8);
-        b = (uint8_t)c;
-        
         if (game_of_life_state_old[i] && !game_of_life_state[i]) {
           // * 127 to only scale through half the sine cycle
           // + 64 offset to get a cosine that starts from 1 instead of a sine from 0
@@ -439,10 +454,17 @@ void serviceLightStateMachine() {
           dim = 255;
         }
 
+        uint32_t c = Wheel(((i * 256 / stripL.numPixels()) + j) & 255);
+        r = (uint8_t)(c >> 16);
+        g = (uint8_t)(c >>  8);
+        b = (uint8_t)c;
+        
         r = (r * dim) >> 8;
         g = (g * dim) >> 8;
         b = (b * dim) >> 8;
 
+        stripL.setBrightness(LED_BRIGHTNESS);
+        stripR.setBrightness(LED_BRIGHTNESS);
         stripL.setPixelColor(i, r, g, b);
         stripR.setPixelColor(i, r, g, b);
       }
