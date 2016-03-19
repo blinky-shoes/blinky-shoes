@@ -455,7 +455,7 @@ void serviceLightStateMachine() {
 void resetGameOfLife() {
   next_game_of_life_tick_time = timer + TIMESTEP_GAME_OF_LIFE;
   for (int i = 0; i < N_LEDS; i = i + 1) {
-    game_of_life_state_old[i] = true;
+    game_of_life_state_old[i] = false;
     game_of_life_state[i] = (random(0,6) < 1);
   }
 }
