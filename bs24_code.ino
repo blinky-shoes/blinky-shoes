@@ -486,22 +486,21 @@ void resetGameOfLife() {
 void serviceGameOfLife() {
   if (timer > next_game_of_life_tick_time) {
     next_game_of_life_tick_time = next_game_of_life_tick_time + TIMESTEP_GAME_OF_LIFE;
-    // update game of life
+
     memcpy(game_of_life_state_old, game_of_life_state, sizeof(game_of_life_state_old));
 
-    // TODO REPLACE MULTIPLICATION WITH BITSHIFTING >>
     game_of_life_state[0] = GAME_OF_LIFE_EIGHTEEN[
-        game_of_life_state_old[1] * 2 +
+        (game_of_life_state_old[1] << 1) +
         game_of_life_state_old[2]];
     for (int i = 1; i < N_LEDS - 1; i = i + 1) {
       game_of_life_state[i] = GAME_OF_LIFE_EIGHTEEN[
-        game_of_life_state_old[i-1] * 4 +
-        game_of_life_state_old[i] * 2 +
+        (game_of_life_state_old[i-1] << 2) +
+        (game_of_life_state_old[i] << 1) +
         game_of_life_state_old[i+1]];
     }
     game_of_life_state[N_LEDS - 1] = GAME_OF_LIFE_EIGHTEEN[
-        game_of_life_state_old[N_LEDS - 2] * 4 +
-        game_of_life_state_old[N_LEDS - 1] * 2];
+        (game_of_life_state_old[N_LEDS - 2] << 2) +
+        (game_of_life_state_old[N_LEDS - 1] << 1)];
   }
 }
 
