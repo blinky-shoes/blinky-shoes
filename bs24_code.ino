@@ -438,10 +438,11 @@ void serviceLightStateMachine() {
         } else {
           dim = 255;
         }
-        r = (uint16_t) (r * dim) >> 8;
-        g = (uint16_t) (g * dim) >> 8;
-        b = (uint16_t) (b * dim) >> 8;
-          
+
+        r = (r * dim) >> 8;
+        g = (g * dim) >> 8;
+        b = (b * dim) >> 8;
+
         stripL.setPixelColor(i, r, g, b);
         stripR.setPixelColor(i, r, g, b);
       }
