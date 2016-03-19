@@ -52,6 +52,7 @@ const uint8_t PROGMEM rose[] = {255,0,200};
 #define G_PER_V 3.3 // conversion factor between volts and g-force
 
 #define LIGHT_OFF 0
+#define LIGHT_DONT_WRITE 1
 #define LIGHT_GAME_OF_LIFE 4
 
 #define MODE_ATTRACT 0
@@ -117,7 +118,9 @@ float
   jerkMag, // sum of squares of xJerk, yJerk, and zJerk
   maxJerk;
 
-unsigned long next_game_of_life_tick_time;
+unsigned long 
+  next_game_of_life_tick_time,
+  next_exit_walking_mode_time;
 boolean game_of_life_state[N_LEDS];
 boolean game_of_life_state_old[N_LEDS];
 const boolean GAME_OF_LIFE_EIGHTEEN[] = {false, true, false, false, true, false, false, false};
@@ -227,6 +230,10 @@ void setup() {
   pinMode(YACCEL_PIN, INPUT);
   pinMode(ZACCEL_PIN, INPUT);
 
+  resetGameOfLife();
+  light_state = LIGHT_OFF;
+  mode_state = MODE_ATTRACT;
+
   readAccel();
 }
 
@@ -239,6 +246,9 @@ void loop() {
   }
 
   stepCalculation();
+  serviceModeStateMachine();
+  serviceLightStateMachine();
+
   stripL.show();
   stripR.show();
   
@@ -288,6 +298,8 @@ void stepCalculation() {
       }
       break; // if the jerk does not exceed the trigger level or there hasn't been enough time, do nothing.
     case TRIGGERED:
+      mode_state_next = MODE_WALKING;
+      next_exit_walking_mode_time = timer + 10 * TIMESTEP_GAME_OF_LIFE;
       if (jerkMag < RESET_LEVEL) { // if the jerk decreases below the reset level, begin settling.
         triggerState = SETTLING;
         break;
@@ -375,10 +387,13 @@ void serviceModeStateMachine() {
       break;
     
     case MODE_WALKING:
-      //serviceBounceStateMachine();
+      light_state = LIGHT_DONT_WRITE;
+      if (timer > next_exit_walking_mode_time) {
+        mode_state_next = MODE_ATTRACT;
+      }
       if (mode_state_next == MODE_ATTRACT) {
         resetGameOfLife();
-      } 
+      }
       break;
   }
   mode_state = mode_state_next;
@@ -388,6 +403,9 @@ void serviceLightStateMachine() {
   uint8_t i, j, brightness;
   j = pgm_read_byte(&SINES[(timer / 64) % 255]);
   switch (light_state) {
+    case LIGHT_DONT_WRITE:
+      break;
+    
     case LIGHT_OFF:
       for(i=0; i<N_LEDS; i++) {
         stripL.setPixelColor(i, 0, 0, 0);
