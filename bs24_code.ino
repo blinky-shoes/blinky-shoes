@@ -28,11 +28,8 @@ const uint8_t PROGMEM chartreuse[] = {200,255,0};
 const uint8_t PROGMEM orange[] = {255,200,0};
 const uint8_t PROGMEM rose[] = {255,0,200};
 
-// Maximum LED brightness. Set this to 1 to make the LEDs brighter, but the battery life will suffer.
-#define BRIGHTNESS 0.5 
-
 #define N_LEDS 24 // number of LEDs in left and right strips
-#define LED_BRIGHTNESS 255 // 0-255
+#define LED_BRIGHTNESS 127 // 0-255
 #define MAXSTEPS 6 // Process (up to) this many concurrent steps
 #define TIMESTEP_MICROSECONDS 5000 // waiting time between animation steps and sensor readings
 #define TIMESTEP_GAME_OF_LIFE 2500 // miliseconds between game of life ticks
@@ -425,6 +422,9 @@ void serviceLightStateMachine() {
           g = (g * min(mag[i], 255)) >> 8;
           b = (b * min(mag[i], 255)) >> 8;      
         }
+        
+        stripL.setBrightness(LED_BRIGHTNESS);
+        stripR.setBrightness(LED_BRIGHTNESS);
         stripL.setPixelColor(i, r, g, b);
         stripR.setPixelColor(i, r, g, b);
       }
@@ -463,8 +463,8 @@ void serviceLightStateMachine() {
         g = (g * dim) >> 8;
         b = (b * dim) >> 8;
 
-        stripL.setBrightness(LED_BRIGHTNESS);
-        stripR.setBrightness(LED_BRIGHTNESS);
+        stripL.setBrightness(LED_BRIGHTNESS >> 2);
+        stripR.setBrightness(LED_BRIGHTNESS >> 2);
         stripL.setPixelColor(i, r, g, b);
         stripR.setPixelColor(i, r, g, b);
       }
@@ -487,10 +487,7 @@ void serviceGameOfLife() {
   if (timer > next_game_of_life_tick_time) {
     next_game_of_life_tick_time = next_game_of_life_tick_time + TIMESTEP_GAME_OF_LIFE;
     // update game of life
-    for (int i = 0; i < N_LEDS; i = i + 1) {
-      // TODO do this with a more efficient memory copy
-      game_of_life_state_old[i] = game_of_life_state[i];
-    }
+    memcpy(game_of_life_state_old, game_of_life_state, sizeof(game_of_life_state_old));
 
     // TODO REPLACE MULTIPLICATION WITH BITSHIFTING >>
     game_of_life_state[0] = GAME_OF_LIFE_EIGHTEEN[
@@ -563,7 +560,7 @@ uint8_t rValue(long level) {
   } else {
     r = pgm_read_byte(&gamma[color3[0]]);
   }
-  return r*BRIGHTNESS;
+  return r;
 }
 
 uint8_t gValue(long level) {
@@ -577,7 +574,7 @@ uint8_t gValue(long level) {
   } else {
     g = pgm_read_byte(&gamma[color3[1]]);
   }
-  return g*BRIGHTNESS;
+  return g;
 }
 
 uint8_t bValue(long level) {
@@ -591,7 +588,7 @@ uint8_t bValue(long level) {
   } else {
     b = pgm_read_byte(&gamma[color3[2]]);
   }
-  return b*BRIGHTNESS;
+  return b;
 }
 
 const uint8_t PROGMEM gamma[] = { // gamma correction table
