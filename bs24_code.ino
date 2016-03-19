@@ -418,9 +418,9 @@ void serviceLightStateMachine() {
           g = (uint8_t)(c >>  8);
           b = (uint8_t)c;
           
-          r = (r * min(mag[i], 255)) >> 8;
-          g = (g * min(mag[i], 255)) >> 8;
-          b = (b * min(mag[i], 255)) >> 8;      
+          r = (r * min(mag[i] >> 2, 255)) >> 8;
+          g = (g * min(mag[i] >> 2, 255)) >> 8;
+          b = (b * min(mag[i] >> 2, 255)) >> 8;      
         }
         
         stripL.setBrightness(LED_BRIGHTNESS);
@@ -463,8 +463,8 @@ void serviceLightStateMachine() {
         g = (g * dim) >> 8;
         b = (b * dim) >> 8;
 
-        stripL.setBrightness(LED_BRIGHTNESS >> 2);
-        stripR.setBrightness(LED_BRIGHTNESS >> 2);
+        stripL.setBrightness(LED_BRIGHTNESS >> 1);
+        stripR.setBrightness(LED_BRIGHTNESS >> 1);
         stripL.setPixelColor(i, r, g, b);
         stripR.setPixelColor(i, r, g, b);
       }
