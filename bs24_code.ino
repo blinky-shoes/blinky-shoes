@@ -52,10 +52,14 @@ const uint8_t PROGMEM rose[] = {255, 0, 200};
 #define LIGHT_OFF 0
 #define LIGHT_DONT_WRITE 1
 #define LIGHT_MAG_WAVES 2
-#define LIGHT_GAME_OF_LIFE 4
+#define LIGHT_CONSTANT_RAINBOW 3
+#define LIGHT_BLINK 4
+#define LIGHT_GAME_OF_LIFE 5
 
-#define MODE_ATTRACT 0
-#define MODE_WALKING 1
+#define STATE_ATTRACT 0
+#define STATE_WALKING 1
+#define STATE_CONSTANT 2
+#define STATE_BLINK 3
 
 #define FORWARD 0
 #define BACKWARD 1
@@ -183,6 +187,7 @@ void setPalette() {
       memcpy_P(color1, &yellow, 3);
       memcpy_P(color2, &cyan, 3);
       memcpy_P(color3, &magenta, 3);
+      mode_state = STATE_CONSTANT;
       break;
     case MODE_RAINBOW:
       memcpy_P(color0, &black, 3);
@@ -209,6 +214,8 @@ void setup() {
     EEPROM.write(MODEADDRESS, modevalue);  
   }
   currentmode = (progmode)modevalue;
+
+  mode_state = STATE_ATTRACT;
   setPalette();
   
   stripL.begin();
@@ -236,10 +243,9 @@ void setup() {
   pinMode(YACCEL_PIN, INPUT);
   pinMode(ZACCEL_PIN, INPUT);
 
+  mode_state_next = mode_state;
   resetGameOfLife();
   light_state = LIGHT_OFF;
-  mode_state = MODE_ATTRACT;
-
   readAccel();
 }
 
@@ -251,7 +257,6 @@ void loop() {
     }
   }
 
-  stepCalculation();
   serviceModeStateMachine();
   serviceLightStateMachine();
 
@@ -284,119 +289,100 @@ void stepCalculation() {
 
   readAccel(); // read the acceleration and calculate the jerk
   
-  switch(currentmode) {
-    case MODE_CONST:
-      stepX[0] += 2;
-      if (stepX[0] >= 768) stepX[0] = 0;
-
-      mag[0] = stepX[0];
-
-      for (i = 1; i < N_LEDS; i++) {
-        mag[i] = (mag[i - 1] + 25) % 768;
+  switch(triggerState) { // depending on the trigger state, we have different behavior:
+    case READY:
+      if ((jerkMag > TRIGGER_LEVEL) && (step_timer > MIN_STEP_TIME)) { // trigger a step if the jerk exceeds the trigger level and there is enough time since the last step.
+        maxJerk = jerkMag; // keep a running tally of the maximum jerk encountered during this step.
+        stepMag[stepNum] = getMag(maxJerk); // set the step magnitude according to the maximum jerk (this is updated if maxJerk changes).
+        triggerState = TRIGGERED;
+        if (xJerk > 0) stepDir[stepNum] = FORWARD; // if the vertical jerk is upwards, the animation moves forward.
+        if (xJerk < 0) stepDir[stepNum] = BACKWARD; // if the vertical jerk is downwards, the animation moves backward.
+        stepX[stepNum] = -80; // the wave starts just out of range.
+        step_timer = 0; // reset the timer to prevent steps from being triggered too close to each other.
+        break;
       }
-      break;
-      
-    case MODE_BLINK:
-      stepX[0] += 80;
-      if (stepX[0] >= 768) stepX[0] = 0;
-
-      mag[0] = stepX[0];
-
-      for (i = 1; i < N_LEDS; i++) {
-        mag[i] = (mag[i - 1] + 25) % 768;
+      break; // if the jerk does not exceed the trigger level or there hasn't been enough time, do nothing.
+    case TRIGGERED:
+      mode_state_next = STATE_WALKING;
+      next_exit_walking_mode_time = timer + 10 * TIMESTEP_GAME_OF_LIFE;
+      if (jerkMag < RESET_LEVEL) { // if the jerk decreases below the reset level, begin settling.
+        triggerState = SETTLING;
+        break;
       }
-      break;
-      
-    default:
-      switch(triggerState) { // depending on the trigger state, we have different behavior:
-        case READY:
-          if ((jerkMag > TRIGGER_LEVEL) && (step_timer > MIN_STEP_TIME)) { // trigger a step if the jerk exceeds the trigger level and there is enough time since the last step.
-            maxJerk = jerkMag; // keep a running tally of the maximum jerk encountered during this step.
-            stepMag[stepNum] = getMag(maxJerk); // set the step magnitude according to the maximum jerk (this is updated if maxJerk changes).
-            triggerState = TRIGGERED;
-            if (xJerk > 0) stepDir[stepNum] = FORWARD; // if the vertical jerk is upwards, the animation moves forward.
-            if (xJerk < 0) stepDir[stepNum] = BACKWARD; // if the vertical jerk is downwards, the animation moves backward.
-            stepX[stepNum] = -80; // the wave starts just out of range.
-            step_timer = 0; // reset the timer to prevent steps from being triggered too close to each other.
-            break;
-          }
-          break; // if the jerk does not exceed the trigger level or there hasn't been enough time, do nothing.
-        case TRIGGERED:
-          mode_state_next = MODE_WALKING;
-          next_exit_walking_mode_time = timer + 10 * TIMESTEP_GAME_OF_LIFE;
-          if (jerkMag < RESET_LEVEL) { // if the jerk decreases below the reset level, begin settling.
-            triggerState = SETTLING;
-            break;
-          }
-          if (jerkMag > maxJerk) { // if the jerk is still increasing, update the step magnitude using the new value of the maximum jerk.
-            maxJerk = jerkMag;
-            stepMag[stepNum] = getMag(maxJerk);
-          }
-          break; // if the jerk decreases but doesn't decrease below the reset level, do nothing.
-        case SETTLING:
-          if (jerkMag > TRIGGER_LEVEL) { // if the jerk exceeds the trigger level, re-trigger.
-            if (jerkMag > maxJerk) { // if the jerk has also exceeded its previous maximum value, update the step magnitude.
-              maxJerk = jerkMag;
-              stepMag[stepNum] = getMag(maxJerk);
-            }
-            triggerState = TRIGGERED;
-            break;
-          } else if (jerkMag < RESET_LEVEL) { // if the jerk has stayed below the reset level, increase the settling counter.
-            settlingCounter++;
-            if (settlingCounter == NUM_SAMPLES_SETTLING) { // if the settling counter reaches a certain value, the trigger becomes ready again.
-              settlingCounter = 0;
-              triggerState = READY;
-              maxJerk = 0;
-              if (++stepNum >= MAXSTEPS) stepNum = 0; // Increment stepNum counter
-            }
-            break;
-          } else { // if the jerk is below the trigger level but above the reset level, reset the settling counter to 0.
-            settlingCounter = 0;
-            break;
-          }
-          break;
-      } 
-
-      // Render a 'brightness map' for all steps in flight. It's like a grayscale image; there's no color yet, just intensities.
-      memset(mag, 0, sizeof(mag)); // Clear magnitude buffer
-      for(i=0; i<MAXSTEPS; i++) { // For each step...
-        if(stepMag[i] <= 0) continue; // Skip if inactive
-        for(j=0; j<N_LEDS; j++) { // For each LED...
-          // Each step has sort of a 'wave' that's part of the animation, moving from heel to toe if the direction is forward
-          // and from toe to heel if the direction is backward. The wave position has sub-pixel resolution (4X), and is up to 80 units (20 pixels) long.
-          mx1 = (j << 2) - stepX[i]; // Position of LED along wave
-          if((mx1 <= 0) || (mx1 >= 80)) continue; // Out of range
-          if(mx1 > 64) { // Rising edge of wave; ramp up fast (4 px)
-            m = ((long)stepMag[i] * (long)(80 - mx1)) >> 4;
-          } else { // Falling edge of wave; fade slow (16 px)
-            m = ((long)stepMag[i] * (long)mx1) >> 6;
-          }
-          if(stepDir[i] == FORWARD) mag[j] += m; // Add magnitude to buffered sum for forward step
-          if(stepDir[i] == BACKWARD) mag[N_LEDS-j-1] += m; // Add magnitude to buffered sum for backward step
+      if (jerkMag > maxJerk) { // if the jerk is still increasing, update the step magnitude using the new value of the maximum jerk.
+        maxJerk = jerkMag;
+        stepMag[stepNum] = getMag(maxJerk);
+      }
+      break; // if the jerk decreases but doesn't decrease below the reset level, do nothing.
+    case SETTLING:
+      if (jerkMag > TRIGGER_LEVEL) { // if the jerk exceeds the trigger level, re-trigger.
+        if (jerkMag > maxJerk) { // if the jerk has also exceeded its previous maximum value, update the step magnitude.
+          maxJerk = jerkMag;
+          stepMag[stepNum] = getMag(maxJerk);
         }
-        stepX[i]++; // Update position of step wave
-        if(stepX[i] >= (80 + (N_LEDS << 2)))
-          stepMag[i] = 0; // Off end; disable step wave
-        else
-          stepMag[i] = ((long)stepMag[i] * 127L) >> 7; // Fade
+        triggerState = TRIGGERED;
+        break;
+      } else if (jerkMag < RESET_LEVEL) { // if the jerk has stayed below the reset level, increase the settling counter.
+        settlingCounter++;
+        if (settlingCounter == NUM_SAMPLES_SETTLING) { // if the settling counter reaches a certain value, the trigger becomes ready again.
+          settlingCounter = 0;
+          triggerState = READY;
+          maxJerk = 0;
+          if (++stepNum >= MAXSTEPS) stepNum = 0; // Increment stepNum counter
+        }
+        break;
+      } else { // if the jerk is below the trigger level but above the reset level, reset the settling counter to 0.
+        settlingCounter = 0;
+        break;
       }
+      break;
+  } 
+
+  // Render a 'brightness map' for all steps in flight. It's like a grayscale image; there's no color yet, just intensities.
+  memset(mag, 0, sizeof(mag)); // Clear magnitude buffer
+  for(i=0; i<MAXSTEPS; i++) { // For each step...
+    if(stepMag[i] <= 0) continue; // Skip if inactive
+    for(j=0; j<N_LEDS; j++) { // For each LED...
+      // Each step has sort of a 'wave' that's part of the animation, moving from heel to toe if the direction is forward
+      // and from toe to heel if the direction is backward. The wave position has sub-pixel resolution (4X), and is up to 80 units (20 pixels) long.
+      mx1 = (j << 2) - stepX[i]; // Position of LED along wave
+      if((mx1 <= 0) || (mx1 >= 80)) continue; // Out of range
+      if(mx1 > 64) { // Rising edge of wave; ramp up fast (4 px)
+        m = ((long)stepMag[i] * (long)(80 - mx1)) >> 4;
+      } else { // Falling edge of wave; fade slow (16 px)
+        m = ((long)stepMag[i] * (long)mx1) >> 6;
+      }
+      if(stepDir[i] == FORWARD) mag[j] += m; // Add magnitude to buffered sum for forward step
+      if(stepDir[i] == BACKWARD) mag[N_LEDS-j-1] += m; // Add magnitude to buffered sum for backward step
+    }
+    stepX[i]++; // Update position of step wave
+    if(stepX[i] >= (80 + (N_LEDS << 2)))
+      stepMag[i] = 0; // Off end; disable step wave
+    else
+      stepMag[i] = ((long)stepMag[i] * 127L) >> 7; // Fade
   }
 }
 
 void serviceModeStateMachine() {
   switch (mode_state) {
-    case MODE_ATTRACT:
+    case STATE_ATTRACT:
+      stepCalculation();
       light_state = LIGHT_GAME_OF_LIFE;
       break;
     
-    case MODE_WALKING:
+    case STATE_WALKING:
+      stepCalculation();
       light_state = LIGHT_MAG_WAVES;
       if (timer > next_exit_walking_mode_time) {
-        mode_state_next = MODE_ATTRACT;
+        mode_state_next = STATE_ATTRACT;
       }
-      if (mode_state_next == MODE_ATTRACT) {
+      if (mode_state_next == STATE_ATTRACT) {
         resetGameOfLife();
       }
+      break;
+
+    case STATE_CONSTANT:
+      light_state = LIGHT_CONSTANT_RAINBOW;
       break;
   }
   mode_state = mode_state_next;
@@ -405,6 +391,7 @@ void serviceModeStateMachine() {
 void serviceLightStateMachine() {
   uint8_t i, j;
   uint8_t r, g, b, dim;
+  uint32_t c;
   long level;
   j = pgm_read_byte(&SINES[(timer / 64) % 255]);
   switch (light_state) {
@@ -412,6 +399,8 @@ void serviceLightStateMachine() {
       break;
 
     case LIGHT_MAG_WAVES:
+      stripL.setBrightness(LED_BRIGHTNESS);
+      stripR.setBrightness(LED_BRIGHTNESS);
       // Now the grayscale magnitude buffer is remapped to color for the LEDs. The colors are drawn from the color palette defined in the setPalette function.
       for(i=0; i<N_LEDS; i++) { // For each LED...
         level = mag[i]; // Pixel magnitude (brightness)
@@ -421,7 +410,7 @@ void serviceLightStateMachine() {
           g = gValue(level);
           b = bValue(level);
         } else {
-          uint32_t c = Wheel(((i * 256 / stripL.numPixels()) + j) & 255);
+          c = Wheel(((i * 256 / stripL.numPixels()) + j) & 255);
           r = (uint8_t)(c >> 16);
           g = (uint8_t)(c >>  8);
           b = (uint8_t)c;
@@ -431,8 +420,20 @@ void serviceLightStateMachine() {
           b = (b * min(mag[i] >> 2, 255)) >> 8;      
         }
         
-        stripL.setBrightness(LED_BRIGHTNESS);
-        stripR.setBrightness(LED_BRIGHTNESS);
+        stripL.setPixelColor(i, r, g, b);
+        stripR.setPixelColor(i, r, g, b);
+      }
+      break;
+
+    case LIGHT_CONSTANT_RAINBOW:
+      stripL.setBrightness(LED_BRIGHTNESS >> 1);
+      stripR.setBrightness(LED_BRIGHTNESS >> 1);
+      for(i=0; i<N_LEDS; i++) { // For each LED...
+        c = Wheel(((i * 256 / stripL.numPixels()) + j) & 255);
+        r = (uint8_t)(c >> 16);
+        g = (uint8_t)(c >>  8);
+        b = (uint8_t)c;
+  
         stripL.setPixelColor(i, r, g, b);
         stripR.setPixelColor(i, r, g, b);
       }
@@ -462,8 +463,6 @@ void serviceLightStateMachine() {
           dim = 255;
         }
 
-
-        
         if (currentmode == MODE_RAINBOW) {
           uint32_t c = Wheel(((i * 256 / stripL.numPixels()) + j) & 255);
           r = (uint8_t)(c >> 16);
