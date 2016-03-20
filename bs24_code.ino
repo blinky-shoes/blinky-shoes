@@ -9,36 +9,33 @@
 #include <EEPROM.h>
 
 // List of program mode names. You can add new modes here. Modes are defined in function setPalette().
-// MODE_MLPONY, MODE_BURN, MODE_WONKA, MODE_PRINPEACH, MODE_MOJITO, MODE_SKYWLKR, MODE_CANDY, MODE_TMNT, 
-typedef enum {MODE_GREG, MODE_CONST, MODE_RAINBOW} progmode;
-#define NUMBEROFMODES 3
+typedef enum {MODE_MLPONY, MODE_BURN, MODE_WONKA, MODE_PRINPEACH, MODE_MOJITO, MODE_SKYWLKR, MODE_CANDY, MODE_TMNT, MODE_CONST, MODE_BLINK, MODE_RAINBOW} progmode;
+#define NUMBEROFMODES 11
 
 // User-defined colors. Add more if desired
-const uint8_t PROGMEM black[] = {0,0,0};
-const uint8_t PROGMEM red[] = {255,0,0};
-const uint8_t PROGMEM green[] = {0,255,0};
-const uint8_t PROGMEM blue[] = {0,0,255};
-const uint8_t PROGMEM yellow[] = {255,255,0};
-const uint8_t PROGMEM magenta[] = {255,0,255};
-const uint8_t PROGMEM cyan[] = {0,255,255};
-const uint8_t PROGMEM white[] = {255,255,255};
-const uint8_t PROGMEM violet[] = {200,0,255};
-const uint8_t PROGMEM azure[] = {0,200,255};
-const uint8_t PROGMEM spring[] = {0,255,200};
-const uint8_t PROGMEM chartreuse[] = {200,255,0};
-const uint8_t PROGMEM orange[] = {255,200,0};
-const uint8_t PROGMEM rose[] = {255,0,200};
-const uint8_t PROGMEM greg_purple[] = {150, 0, 204};
-const uint8_t PROGMEM greg_red[] = {219, 0, 88};
-const uint8_t PROGMEM greg_blue[] = {0, 168, 165};
+const uint8_t PROGMEM black[] = {0, 0, 0};
+const uint8_t PROGMEM red[] = {255, 0, 0};
+const uint8_t PROGMEM green[] = {0, 255, 0};
+const uint8_t PROGMEM blue[] = {0, 0, 255};
+const uint8_t PROGMEM yellow[] = {255, 255, 0};
+const uint8_t PROGMEM magenta[] = {255, 0, 255};
+const uint8_t PROGMEM cyan[] = {0, 255, 255};
+const uint8_t PROGMEM white[] = {255, 255, 255};
+const uint8_t PROGMEM violet[] = {200, 0, 255};
+const uint8_t PROGMEM azure[] = {0, 200, 255};
+const uint8_t PROGMEM spring[] = {0, 255, 200};
+const uint8_t PROGMEM chartreuse[] = {200, 255, 0};
+const uint8_t PROGMEM orange[] = {255, 200, 0};
+const uint8_t PROGMEM rose[] = {255, 0, 200};
 
-#define N_LEDS 21 // number of LEDs in left and right strips
-#define LED_BRIGHTNESS 255 // 0-255
+#define N_LEDS 24 // number of LEDs in left and right strips
+#define LED_BRIGHTNESS 127 // 0-255
 #define MAXSTEPS 6 // Process (up to) this many concurrent steps
 #define TIMESTEP_MICROSECONDS 5000 // waiting time between animation steps and sensor readings
+#define BLINK_DELAY_MILLISECONDS 200 // waiting time between animation steps and sensor readings
 #define TIMESTEP_GAME_OF_LIFE 2500 // miliseconds between game of life ticks
 
-#define MODEADDRESS 100 // Byte address in EEPROM to use for the mode counter (0-1023).
+#define MODEADDRESS 300 // Byte address in EEPROM to use for the mode counter (0-1023).
 #define SWITCHADDRESS 101 // Byte address in EEPROM to use for the mode switch flag (0-1023).
 #define MODE_SWITCH_TIME 2000 // Number of milliseconds before power cycle doesn't change modes
 #define DISPLAY_PALETTE_TIME 2000 // Number of milliseconds that the color palette is displayed
@@ -74,7 +71,7 @@ const uint8_t PROGMEM greg_blue[] = {0, 168, 165};
 #define MULTIPLIER 100
 #define MIN_STEP_TIME 200
 #define MAX_STEP_MAG 1000
-#define MIN_STEP_MAG 300
+#define MIN_STEP_MAG 200
 
 #define SWITCH_MODES 1
 #define DONT_SWITCH_MODES 0
@@ -107,9 +104,7 @@ uint8_t
 
 boolean
   modeSwitchTimeExceeded = false,
-  stepDir[MAXSTEPS],
-  constMode = false,
-  rainbowMode = false;
+  stepDir[MAXSTEPS];
 
 float
   x, // current x-acceleration
@@ -128,78 +123,72 @@ boolean game_of_life_state[N_LEDS];
 boolean game_of_life_state_old[N_LEDS];
 const boolean GAME_OF_LIFE_EIGHTEEN[] = {false, true, false, false, true, false, false, false};
 
+progmode currentmode;
+
 // Define program modes here. Each mode specifies a palette of four colors.
-void setPalette(uint8_t modevalue) {
-  progmode currentmode = (progmode)modevalue;
+void setPalette() {
   switch(currentmode) {
     default:
-//    case MODE_MLPONY:
-//      memcpy_P(color0, &black, 3);  // "darkest" color (use BLACK for fade-out)
-//      memcpy_P(color1, &cyan, 3);  // "second-darkest" color
-//      memcpy_P(color2, &yellow, 3); // "second-brightest" color
-//      memcpy_P(color3, &magenta, 3); // "brightest" color
-//      break;
-//    case MODE_BURN:
-//      memcpy_P(color0, &black, 3);
-//      memcpy_P(color1, &red, 3);
-//      memcpy_P(color2, &yellow, 3);
-//      memcpy_P(color3, &white, 3);
-//      break;
-//    case MODE_WONKA:
-//      memcpy_P(color0, &black, 3);
-//      memcpy_P(color1, &violet, 3);
-//      memcpy_P(color2, &green, 3);
-//      memcpy_P(color3, &yellow, 3);
-//      break;
-//    case MODE_PRINPEACH:
-//      memcpy_P(color0, &black, 3);
-//      memcpy_P(color1, &rose, 3);
-//      memcpy_P(color2, &white, 3);
-//      memcpy_P(color3, &yellow, 3);
-//      break;
-//    case MODE_MOJITO:
-//      memcpy_P(color0, &black, 3);
-//      memcpy_P(color1, &green, 3);
-//      memcpy_P(color2, &cyan, 3);
-//      memcpy_P(color3, &white, 3);
-//      break; 
-//    case MODE_SKYWLKR:
-//      memcpy_P(color0, &black, 3);
-//      memcpy_P(color1, &cyan, 3);
-//      memcpy_P(color2, &white, 3);
-//      memcpy_P(color3, &yellow, 3);
-//      break;    
-//    case MODE_CANDY:
-//      memcpy_P(color0, &black, 3);
-//      memcpy_P(color1, &rose, 3);
-//      memcpy_P(color2, &magenta, 3);
-//      memcpy_P(color3, &blue, 3);
-//      break;
-//    case MODE_TMNT:
-//      memcpy_P(color0, &black, 3);
-//      memcpy_P(color1, &green, 3);
-//      memcpy_P(color2, &yellow, 3);
-//      memcpy_P(color3, &orange, 3);
-//      break;
-    case MODE_GREG:
-      memcpy_P(color0, &black, 3);
-      memcpy_P(color1, &greg_blue, 3);
-      memcpy_P(color2, &greg_purple, 3);
-      memcpy_P(color3, &greg_red, 3);
+    case MODE_MLPONY:
+      memcpy_P(color0, &black, 3);  // "darkest" color (use BLACK for fade-out)
+      memcpy_P(color1, &cyan, 3);  // "second-darkest" color
+      memcpy_P(color2, &yellow, 3); // "second-brightest" color
+      memcpy_P(color3, &magenta, 3); // "brightest" color
       break;
+    case MODE_BURN:
+      memcpy_P(color0, &black, 3);
+      memcpy_P(color1, &red, 3);
+      memcpy_P(color2, &yellow, 3);
+      memcpy_P(color3, &white, 3);
+      break;
+    case MODE_WONKA:
+      memcpy_P(color0, &black, 3);
+      memcpy_P(color1, &violet, 3);
+      memcpy_P(color2, &green, 3);
+      memcpy_P(color3, &yellow, 3);
+      break;
+    case MODE_PRINPEACH:
+      memcpy_P(color0, &black, 3);
+      memcpy_P(color1, &rose, 3);
+      memcpy_P(color2, &white, 3);
+      memcpy_P(color3, &yellow, 3);
+      break;
+    case MODE_MOJITO:
+      memcpy_P(color0, &black, 3);
+      memcpy_P(color1, &green, 3);
+      memcpy_P(color2, &cyan, 3);
+      memcpy_P(color3, &white, 3);
+      break; 
+    case MODE_SKYWLKR:
+      memcpy_P(color0, &black, 3);
+      memcpy_P(color1, &cyan, 3);
+      memcpy_P(color2, &white, 3);
+      memcpy_P(color3, &yellow, 3);
+      break;    
+    case MODE_CANDY:
+      memcpy_P(color0, &black, 3);
+      memcpy_P(color1, &rose, 3);
+      memcpy_P(color2, &magenta, 3);
+      memcpy_P(color3, &blue, 3);
+      break;
+    case MODE_TMNT:
+      memcpy_P(color0, &black, 3);
+      memcpy_P(color1, &green, 3);
+      memcpy_P(color2, &yellow, 3);
+      memcpy_P(color3, &orange, 3);
+      break;
+    case MODE_BLINK:
     case MODE_CONST:
       memcpy_P(color0, &magenta, 3);
       memcpy_P(color1, &yellow, 3);
       memcpy_P(color2, &cyan, 3);
       memcpy_P(color3, &magenta, 3);
-      constMode = true;
       break;
     case MODE_RAINBOW:
       memcpy_P(color0, &black, 3);
       memcpy_P(color1, &white, 3);
       memcpy_P(color2, &black, 3);
       memcpy_P(color3, &white, 3);
-      rainbowMode = true;
       break;
   }
 }
@@ -214,19 +203,20 @@ void setup() {
   
   modevalue = EEPROM.read(MODEADDRESS); // read mode counter from EEPROM (non-volatile memory)
     
-  if (modevalue >= NUMBEROFMODES) modevalue = 0; // fix out-of-range mode counter (happens when the program is run for the first time)
+  if (modevalue >= NUMBEROFMODES) modevalue = NUMBEROFMODES; // fix out-of-range mode counter (happens when the program is run for the first time)
   if (modeSwitch == SWITCH_MODES) {
     if (++modevalue >= NUMBEROFMODES) modevalue = 0; // increment the mode counter
     EEPROM.write(MODEADDRESS, modevalue);  
   }
-  setPalette(modevalue);
+  currentmode = (progmode)modevalue;
+  setPalette();
   
   stripL.begin();
   stripR.begin();
   memset(stepMag, 0, sizeof(stepMag));
   memset(stepX, 0, sizeof(stepX));
 
-  if (constMode == false) {
+  if (currentmode != MODE_CONST && currentmode != MODE_BLINK) {
     if (modeSwitch == SWITCH_MODES) { // if we are switching modes, display the color palette
       displayPalette();
     } else { // if we are not switching modes, trigger a step animation
@@ -235,7 +225,7 @@ void setup() {
       stepDir[0] = FORWARD;
       stepNum = 1;
     }
-  }    
+  }
 
   // IMPORTANT! The analog reference pin (AREF) is tied directly to 3.3V (UCAP).
   // If you don't set the analog reference to external, then AREF is connected to
@@ -294,91 +284,102 @@ void stepCalculation() {
 
   readAccel(); // read the acceleration and calculate the jerk
   
-  if (constMode == false) { // the following code is for the non-constant modes
-  
-  switch(triggerState) { // depending on the trigger state, we have different behavior:
-    case READY:
-      if ((jerkMag > TRIGGER_LEVEL) && (step_timer > MIN_STEP_TIME)) { // trigger a step if the jerk exceeds the trigger level and there is enough time since the last step.
-        maxJerk = jerkMag; // keep a running tally of the maximum jerk encountered during this step.
-        stepMag[stepNum] = getMag(maxJerk); // set the step magnitude according to the maximum jerk (this is updated if maxJerk changes).
-        triggerState = TRIGGERED;
-        if (xJerk > 0) stepDir[stepNum] = FORWARD; // if the vertical jerk is upwards, the animation moves forward.
-        if (xJerk < 0) stepDir[stepNum] = BACKWARD; // if the vertical jerk is downwards, the animation moves backward.
-        stepX[stepNum] = -80; // the wave starts just out of range.
-        step_timer = 0; // reset the timer to prevent steps from being triggered too close to each other.
-        break;
-      }
-      break; // if the jerk does not exceed the trigger level or there hasn't been enough time, do nothing.
-    case TRIGGERED:
-      mode_state_next = MODE_WALKING;
-      next_exit_walking_mode_time = timer + 10 * TIMESTEP_GAME_OF_LIFE;
-      if (jerkMag < RESET_LEVEL) { // if the jerk decreases below the reset level, begin settling.
-        triggerState = SETTLING;
-        break;
-      }
-      if (jerkMag > maxJerk) { // if the jerk is still increasing, update the step magnitude using the new value of the maximum jerk.
-        maxJerk = jerkMag;
-        stepMag[stepNum] = getMag(maxJerk);
-      }
-      break; // if the jerk decreases but doesn't decrease below the reset level, do nothing.
-    case SETTLING:
-      if (jerkMag > TRIGGER_LEVEL) { // if the jerk exceeds the trigger level, re-trigger.
-        if (jerkMag > maxJerk) { // if the jerk has also exceeded its previous maximum value, update the step magnitude.
-          maxJerk = jerkMag;
-          stepMag[stepNum] = getMag(maxJerk);
-        }
-        triggerState = TRIGGERED;
-        break;
-      } else if (jerkMag < RESET_LEVEL) { // if the jerk has stayed below the reset level, increase the settling counter.
-        settlingCounter++;
-        if (settlingCounter == NUM_SAMPLES_SETTLING) { // if the settling counter reaches a certain value, the trigger becomes ready again.
-          settlingCounter = 0;
-          triggerState = READY;
-          maxJerk = 0;
-          if (++stepNum >= MAXSTEPS) stepNum = 0; // Increment stepNum counter
-        }
-        break;
-      } else { // if the jerk is below the trigger level but above the reset level, reset the settling counter to 0.
-        settlingCounter = 0;
-        break;
+  switch(currentmode) {
+    case MODE_CONST:
+      stepX[0] += 2;
+      if (stepX[0] >= 768) stepX[0] = 0;
+
+      mag[0] = stepX[0];
+
+      for (i = 1; i < N_LEDS; i++) {
+        mag[i] = (mag[i - 1] + 25) % 768;
       }
       break;
-  }
-  
-  // Render a 'brightness map' for all steps in flight. It's like a grayscale image; there's no color yet, just intensities.
-  memset(mag, 0, sizeof(mag)); // Clear magnitude buffer
-  for(i=0; i<MAXSTEPS; i++) { // For each step...
-    if(stepMag[i] <= 0) continue; // Skip if inactive
-    for(j=0; j<N_LEDS; j++) { // For each LED...
-      // Each step has sort of a 'wave' that's part of the animation, moving from heel to toe if the direction is forward
-      // and from toe to heel if the direction is backward. The wave position has sub-pixel resolution (4X), and is up to 80 units (20 pixels) long.
-      mx1 = (j << 2) - stepX[i]; // Position of LED along wave
-      if((mx1 <= 0) || (mx1 >= 80)) continue; // Out of range
-      if(mx1 > 64) { // Rising edge of wave; ramp up fast (4 px)
-        m = ((long)stepMag[i] * (long)(80 - mx1)) >> 4;
-      } else { // Falling edge of wave; fade slow (16 px)
-        m = ((long)stepMag[i] * (long)mx1) >> 6;
+      
+    case MODE_BLINK:
+      stepX[0] += 80;
+      if (stepX[0] >= 768) stepX[0] = 0;
+
+      mag[0] = stepX[0];
+
+      for (i = 1; i < N_LEDS; i++) {
+        mag[i] = (mag[i - 1] + 25) % 768;
       }
-      if(stepDir[i] == FORWARD) mag[j] += m; // Add magnitude to buffered sum for forward step
-      if(stepDir[i] == BACKWARD) mag[N_LEDS-j-1] += m; // Add magnitude to buffered sum for backward step
-    }
-    stepX[i]++; // Update position of step wave
-    if(stepX[i] >= (80 + (N_LEDS << 2)))
-      stepMag[i] = 0; // Off end; disable step wave
-    else
-      stepMag[i] = ((long)stepMag[i] * 127L) >> 7; // Fade
-  }
-  
-  } else { // constant mode!
-    stepX[0] += 2;
-    if (stepX[0] >= 768) stepX[0] = 0;
-    
-    mag[0] = stepX[0];
-    
-    for(i=1; i<N_LEDS; i++) {
-      mag[i] = mag[i-1] + 25;
-      if (mag[i] >= 768) mag[i] -= 768;
-    }
+      break;
+      
+    default:
+      switch(triggerState) { // depending on the trigger state, we have different behavior:
+        case READY:
+          if ((jerkMag > TRIGGER_LEVEL) && (step_timer > MIN_STEP_TIME)) { // trigger a step if the jerk exceeds the trigger level and there is enough time since the last step.
+            maxJerk = jerkMag; // keep a running tally of the maximum jerk encountered during this step.
+            stepMag[stepNum] = getMag(maxJerk); // set the step magnitude according to the maximum jerk (this is updated if maxJerk changes).
+            triggerState = TRIGGERED;
+            if (xJerk > 0) stepDir[stepNum] = FORWARD; // if the vertical jerk is upwards, the animation moves forward.
+            if (xJerk < 0) stepDir[stepNum] = BACKWARD; // if the vertical jerk is downwards, the animation moves backward.
+            stepX[stepNum] = -80; // the wave starts just out of range.
+            step_timer = 0; // reset the timer to prevent steps from being triggered too close to each other.
+            break;
+          }
+          break; // if the jerk does not exceed the trigger level or there hasn't been enough time, do nothing.
+        case TRIGGERED:
+          mode_state_next = MODE_WALKING;
+          next_exit_walking_mode_time = timer + 10 * TIMESTEP_GAME_OF_LIFE;
+          if (jerkMag < RESET_LEVEL) { // if the jerk decreases below the reset level, begin settling.
+            triggerState = SETTLING;
+            break;
+          }
+          if (jerkMag > maxJerk) { // if the jerk is still increasing, update the step magnitude using the new value of the maximum jerk.
+            maxJerk = jerkMag;
+            stepMag[stepNum] = getMag(maxJerk);
+          }
+          break; // if the jerk decreases but doesn't decrease below the reset level, do nothing.
+        case SETTLING:
+          if (jerkMag > TRIGGER_LEVEL) { // if the jerk exceeds the trigger level, re-trigger.
+            if (jerkMag > maxJerk) { // if the jerk has also exceeded its previous maximum value, update the step magnitude.
+              maxJerk = jerkMag;
+              stepMag[stepNum] = getMag(maxJerk);
+            }
+            triggerState = TRIGGERED;
+            break;
+          } else if (jerkMag < RESET_LEVEL) { // if the jerk has stayed below the reset level, increase the settling counter.
+            settlingCounter++;
+            if (settlingCounter == NUM_SAMPLES_SETTLING) { // if the settling counter reaches a certain value, the trigger becomes ready again.
+              settlingCounter = 0;
+              triggerState = READY;
+              maxJerk = 0;
+              if (++stepNum >= MAXSTEPS) stepNum = 0; // Increment stepNum counter
+            }
+            break;
+          } else { // if the jerk is below the trigger level but above the reset level, reset the settling counter to 0.
+            settlingCounter = 0;
+            break;
+          }
+          break;
+      } 
+
+      // Render a 'brightness map' for all steps in flight. It's like a grayscale image; there's no color yet, just intensities.
+      memset(mag, 0, sizeof(mag)); // Clear magnitude buffer
+      for(i=0; i<MAXSTEPS; i++) { // For each step...
+        if(stepMag[i] <= 0) continue; // Skip if inactive
+        for(j=0; j<N_LEDS; j++) { // For each LED...
+          // Each step has sort of a 'wave' that's part of the animation, moving from heel to toe if the direction is forward
+          // and from toe to heel if the direction is backward. The wave position has sub-pixel resolution (4X), and is up to 80 units (20 pixels) long.
+          mx1 = (j << 2) - stepX[i]; // Position of LED along wave
+          if((mx1 <= 0) || (mx1 >= 80)) continue; // Out of range
+          if(mx1 > 64) { // Rising edge of wave; ramp up fast (4 px)
+            m = ((long)stepMag[i] * (long)(80 - mx1)) >> 4;
+          } else { // Falling edge of wave; fade slow (16 px)
+            m = ((long)stepMag[i] * (long)mx1) >> 6;
+          }
+          if(stepDir[i] == FORWARD) mag[j] += m; // Add magnitude to buffered sum for forward step
+          if(stepDir[i] == BACKWARD) mag[N_LEDS-j-1] += m; // Add magnitude to buffered sum for backward step
+        }
+        stepX[i]++; // Update position of step wave
+        if(stepX[i] >= (80 + (N_LEDS << 2)))
+          stepMag[i] = 0; // Off end; disable step wave
+        else
+          stepMag[i] = ((long)stepMag[i] * 127L) >> 7; // Fade
+      }
   }
 }
 
@@ -415,7 +416,7 @@ void serviceLightStateMachine() {
       for(i=0; i<N_LEDS; i++) { // For each LED...
         level = mag[i]; // Pixel magnitude (brightness)
 
-        if (rainbowMode == false) {
+        if (currentmode != MODE_RAINBOW) {
           r = rValue(level); // use helper functions rValue, gValue, and bValue to compute colors from the pixel magnitude
           g = gValue(level);
           b = bValue(level);
@@ -463,7 +464,7 @@ void serviceLightStateMachine() {
 
 
         
-        if (rainbowMode == true) {
+        if (currentmode == MODE_RAINBOW) {
           uint32_t c = Wheel(((i * 256 / stripL.numPixels()) + j) & 255);
           r = (uint8_t)(c >> 16);
           g = (uint8_t)(c >>  8);
@@ -521,26 +522,26 @@ void serviceGameOfLife() {
 }
 
 void readAccel() { // helper function to read the accelerometer and calculate the jerk.
-  int xint = analogRead(XACCEL_PIN)-512;
-  int yint = analogRead(YACCEL_PIN)-512;
-  int zint = analogRead(ZACCEL_PIN)-512;
+  int xint = analogRead(XACCEL_PIN) - 512;
+  int yint = analogRead(YACCEL_PIN) - 512;
+  int zint = analogRead(ZACCEL_PIN) - 512;
   float xOld = x;
   float yOld = y;
   float zOld = z;
   
-  x = ((float)xint)/1024*V_REF*G_PER_V;
-  y = ((float)yint)/1024*V_REF*G_PER_V;
-  z = ((float)zint)/1024*V_REF*G_PER_V;
+  x = ((float)xint) / 1024 * V_REF * G_PER_V;
+  y = ((float)yint) / 1024 * V_REF * G_PER_V;
+  z = ((float)zint) / 1024 * V_REF * G_PER_V;
    
   xJerk = x - xOld;
   yJerk = y - yOld;
   zJerk = z - zOld;
 
-  jerkMag = xJerk*xJerk + yJerk*yJerk + zJerk*zJerk;
+  jerkMag = xJerk * xJerk + yJerk * yJerk + zJerk * zJerk;
 }
 
 long getMag(float jerk) { // this turns a jerk value into a pixel magnitude using a predefined multiplier and bounds.
-  return max(min(jerk*MULTIPLIER,MAX_STEP_MAG),MIN_STEP_MAG);
+  return max(min(jerk * MULTIPLIER, MAX_STEP_MAG), MIN_STEP_MAG);
 }
 
 // Input a value 0 to 255 to get a color value.
@@ -566,12 +567,12 @@ uint32_t Wheel(byte WheelPos) {
 
 uint8_t rValue(long level) {
   uint8_t r;
-  if(level < 256) {
-    r = pgm_read_byte(&gamma[(color0[0]*(255L-level) + color1[0]*(level) + 128L)>>8]);
+  if (level < 256) {
+    r = pgm_read_byte(&gamma[(color0[0] * (255L - level) + color1[0] * (level) + 128L) >> 8]);
   } else if (level < 512) {
-    r = pgm_read_byte(&gamma[(color1[0]*(255L-(level-256L)) + color2[0]*(level-256L) + 128L)>>8]);
+    r = pgm_read_byte(&gamma[(color1[0] * (255L - (level - 256L)) + color2[0] * (level - 256L) + 128L) >> 8]);
   } else if (level < 768) {
-    r = pgm_read_byte(&gamma[(color2[0]*(255L-(level-512L)) + color3[0]*(level-512L) + 128L)>>8]);
+    r = pgm_read_byte(&gamma[(color2[0] * (255L - (level - 512L)) + color3[0] * (level - 512L) + 128L) >> 8]);
   } else {
     r = pgm_read_byte(&gamma[color3[0]]);
   }
@@ -580,12 +581,12 @@ uint8_t rValue(long level) {
 
 uint8_t gValue(long level) {
   uint8_t g;
-  if(level < 256) {
-    g = pgm_read_byte(&gamma[(color0[1]*(255L-level) + color1[1]*(level) + 128L)>>8]);
+  if (level < 256) {
+    g = pgm_read_byte(&gamma[(color0[1] * (255L - level) + color1[1] * (level) + 128L) >> 8]);
   } else if (level < 512) {
-    g = pgm_read_byte(&gamma[(color1[1]*(255L-(level-256L)) + color2[1]*(level-256L) + 128L)>>8]);
+    g = pgm_read_byte(&gamma[(color1[1] * (255L - (level - 256L)) + color2[1] * (level - 256L) + 128L) >> 8]);
   } else if (level < 768) {
-    g = pgm_read_byte(&gamma[(color2[1]*(255L-(level-512L)) + color3[1]*(level-512L) + 128L)>>8]);
+    g = pgm_read_byte(&gamma[(color2[1] * (255L - (level - 512L)) + color3[1] * (level - 512L) + 128L) >> 8]);
   } else {
     g = pgm_read_byte(&gamma[color3[1]]);
   }
@@ -594,12 +595,12 @@ uint8_t gValue(long level) {
 
 uint8_t bValue(long level) {
   uint8_t b;
-  if(level < 256) {
-    b = pgm_read_byte(&gamma[(color0[2]*(255L-level) + color1[2]*(level) + 128L)>>8]);
+  if (level < 256) {
+    b = pgm_read_byte(&gamma[(color0[2] * (255L - level) + color1[2] * (level) + 128L) >> 8]);
   } else if (level < 512) {
-    b = pgm_read_byte(&gamma[(color1[2]*(255L-(level-256L)) + color2[2]*(level-256L) + 128L)>>8]);
+    b = pgm_read_byte(&gamma[(color1[2] * (255L - (level - 256L)) + color2[2] * (level - 256L) + 128L) >> 8]);
   } else if (level < 768) {
-    b = pgm_read_byte(&gamma[(color2[2]*(255L-(level-512L)) + color3[2]*(level-512L) + 128L)>>8]);
+    b = pgm_read_byte(&gamma[(color2[2] * (255L - (level - 512L)) + color3[2] * (level - 512L) + 128L) >> 8]);
   } else {
     b = pgm_read_byte(&gamma[color3[2]]);
   }
@@ -618,11 +619,12 @@ const uint8_t PROGMEM gamma[] = { // gamma correction table
   37, 38, 39, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 50,
   51, 52, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 66, 67, 68,
   69, 70, 72, 73, 74, 75, 77, 78, 79, 81, 82, 83, 85, 86, 87, 89,
-  90, 92, 93, 95, 96, 98, 99,101,102,104,105,107,109,110,112,114,
-  115,117,119,120,122,124,126,127,129,131,133,135,137,138,140,142,
-  144,146,148,150,152,154,156,158,160,162,164,167,169,171,173,175,
-  177,180,182,184,186,189,191,193,196,198,200,203,205,208,210,213,
-  215,218,220,223,225,228,231,233,236,239,241,244,247,249,252,255 };
+  90, 92, 93, 95, 96, 98, 99, 101, 102, 104, 105, 107, 109, 110, 112, 114,
+  115, 117, 119, 120, 122, 124, 126, 127, 129, 131, 133, 135, 137, 138, 140, 142,
+  144, 146, 148, 150, 152, 154, 156, 158, 160, 162, 164, 167, 169, 171, 173, 175,
+  177, 180, 182, 184, 186, 189, 191, 193, 196, 198, 200, 203, 205, 208, 210, 213,
+  215, 218, 220, 223, 225, 228, 231, 233, 236, 239, 241, 244, 247, 249, 252, 255
+};
 
 const uint8_t PROGMEM SINES[] = {
   127, 130, 133, 136, 139, 142, 145, 148, 151, 154, 157, 161, 164, 166, 169, 172, 175, 
