@@ -53,7 +53,7 @@ const uint8_t PROGMEM rose[] = {255, 0, 200};
 #define LIGHT_DONT_WRITE 1
 #define LIGHT_MAG_WAVES 2
 #define LIGHT_CONSTANT_RAINBOW 3
-#define LIGHT_BLINK 4
+#define LIGHT_BLINK_RAINBOW 4
 #define LIGHT_GAME_OF_LIFE 5
 
 #define STATE_ATTRACT 0
@@ -182,11 +182,9 @@ void setPalette() {
       memcpy_P(color3, &orange, 3);
       break;
     case MODE_BLINK:
+      mode_state = STATE_BLINK;
+      break;
     case MODE_CONST:
-      memcpy_P(color0, &magenta, 3);
-      memcpy_P(color1, &yellow, 3);
-      memcpy_P(color2, &cyan, 3);
-      memcpy_P(color3, &magenta, 3);
       mode_state = STATE_CONSTANT;
       break;
     case MODE_RAINBOW:
@@ -381,6 +379,10 @@ void serviceModeStateMachine() {
       }
       break;
 
+    case STATE_BLINK:
+      light_state = LIGHT_BLINK_RAINBOW;
+      break;
+
     case STATE_CONSTANT:
       light_state = LIGHT_CONSTANT_RAINBOW;
       break;
@@ -434,6 +436,25 @@ void serviceLightStateMachine() {
         g = (uint8_t)(c >>  8);
         b = (uint8_t)c;
   
+        stripL.setPixelColor(i, r, g, b);
+        stripR.setPixelColor(i, r, g, b);
+      }
+      break;
+
+    case LIGHT_BLINK_RAINBOW:
+      if ((timer >> 8) % 2 == 0) {
+        stripL.setBrightness(LED_BRIGHTNESS >> 1);
+        stripR.setBrightness(LED_BRIGHTNESS >> 1);
+      } else {
+        stripL.setBrightness(0);
+        stripR.setBrightness(0);
+      }
+      for(i=0; i<N_LEDS; i++) { // For each LED...
+        c = Wheel(((i * 256 / stripL.numPixels()) + j) & 255);
+        r = (uint8_t)(c >> 16);
+        g = (uint8_t)(c >>  8);
+        b = (uint8_t)c;
+
         stripL.setPixelColor(i, r, g, b);
         stripR.setPixelColor(i, r, g, b);
       }
