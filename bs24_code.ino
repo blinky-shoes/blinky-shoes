@@ -9,8 +9,9 @@
 #include <EEPROM.h>
 
 // List of program mode names. You can add new modes here. Modes are defined in function setPalette().
-typedef enum {MODE_MLPONY, MODE_BURN, MODE_WONKA, MODE_PRINPEACH, MODE_MOJITO, MODE_SKYWLKR, MODE_CANDY, MODE_TMNT, MODE_CONST, MODE_RAINBOW} progmode;
-#define NUMBEROFMODES 10
+// MODE_MLPONY, MODE_BURN, MODE_WONKA, MODE_PRINPEACH, MODE_MOJITO, MODE_SKYWLKR, MODE_CANDY, MODE_TMNT, 
+typedef enum {MODE_GREG, MODE_CONST, MODE_RAINBOW} progmode;
+#define NUMBEROFMODES 3
 
 // User-defined colors. Add more if desired
 const uint8_t PROGMEM black[] = {0,0,0};
@@ -27,9 +28,12 @@ const uint8_t PROGMEM spring[] = {0,255,200};
 const uint8_t PROGMEM chartreuse[] = {200,255,0};
 const uint8_t PROGMEM orange[] = {255,200,0};
 const uint8_t PROGMEM rose[] = {255,0,200};
+const uint8_t PROGMEM greg_purple[] = {150, 0, 204};
+const uint8_t PROGMEM greg_red[] = {192, 62, 35};
+const uint8_t PROGMEM greg_blue[] = {0, 168, 165};
 
-#define N_LEDS 24 // number of LEDs in left and right strips
-#define LED_BRIGHTNESS 127 // 0-255
+#define N_LEDS 21 // number of LEDs in left and right strips
+#define LED_BRIGHTNESS 255 // 0-255
 #define MAXSTEPS 6 // Process (up to) this many concurrent steps
 #define TIMESTEP_MICROSECONDS 5000 // waiting time between animation steps and sensor readings
 #define TIMESTEP_GAME_OF_LIFE 2500 // miliseconds between game of life ticks
@@ -129,54 +133,60 @@ void setPalette(uint8_t modevalue) {
   progmode currentmode = (progmode)modevalue;
   switch(currentmode) {
     default:
-    case MODE_MLPONY:
-      memcpy_P(color0, &black, 3);  // "darkest" color (use BLACK for fade-out)
-      memcpy_P(color1, &cyan, 3);  // "second-darkest" color
-      memcpy_P(color2, &yellow, 3); // "second-brightest" color
-      memcpy_P(color3, &magenta, 3); // "brightest" color
+//    case MODE_MLPONY:
+//      memcpy_P(color0, &black, 3);  // "darkest" color (use BLACK for fade-out)
+//      memcpy_P(color1, &cyan, 3);  // "second-darkest" color
+//      memcpy_P(color2, &yellow, 3); // "second-brightest" color
+//      memcpy_P(color3, &magenta, 3); // "brightest" color
+//      break;
+//    case MODE_BURN:
+//      memcpy_P(color0, &black, 3);
+//      memcpy_P(color1, &red, 3);
+//      memcpy_P(color2, &yellow, 3);
+//      memcpy_P(color3, &white, 3);
+//      break;
+//    case MODE_WONKA:
+//      memcpy_P(color0, &black, 3);
+//      memcpy_P(color1, &violet, 3);
+//      memcpy_P(color2, &green, 3);
+//      memcpy_P(color3, &yellow, 3);
+//      break;
+//    case MODE_PRINPEACH:
+//      memcpy_P(color0, &black, 3);
+//      memcpy_P(color1, &rose, 3);
+//      memcpy_P(color2, &white, 3);
+//      memcpy_P(color3, &yellow, 3);
+//      break;
+//    case MODE_MOJITO:
+//      memcpy_P(color0, &black, 3);
+//      memcpy_P(color1, &green, 3);
+//      memcpy_P(color2, &cyan, 3);
+//      memcpy_P(color3, &white, 3);
+//      break; 
+//    case MODE_SKYWLKR:
+//      memcpy_P(color0, &black, 3);
+//      memcpy_P(color1, &cyan, 3);
+//      memcpy_P(color2, &white, 3);
+//      memcpy_P(color3, &yellow, 3);
+//      break;    
+//    case MODE_CANDY:
+//      memcpy_P(color0, &black, 3);
+//      memcpy_P(color1, &rose, 3);
+//      memcpy_P(color2, &magenta, 3);
+//      memcpy_P(color3, &blue, 3);
+//      break;
+//    case MODE_TMNT:
+//      memcpy_P(color0, &black, 3);
+//      memcpy_P(color1, &green, 3);
+//      memcpy_P(color2, &yellow, 3);
+//      memcpy_P(color3, &orange, 3);
+//      break;
+    case MODE_GREG:
+      memcpy_P(color0, &black, 3);
+      memcpy_P(color1, &greg_blue, 3);
+      memcpy_P(color2, &greg_purple, 3);
+      memcpy_P(color3, &greg_red, 3);
       break;
-    case MODE_BURN:
-      memcpy_P(color0, &black, 3);
-      memcpy_P(color1, &red, 3);
-      memcpy_P(color2, &yellow, 3);
-      memcpy_P(color3, &white, 3);
-      break;
-    case MODE_WONKA:
-      memcpy_P(color0, &black, 3);
-      memcpy_P(color1, &violet, 3);
-      memcpy_P(color2, &green, 3);
-      memcpy_P(color3, &yellow, 3);
-      break;    
-    case MODE_PRINPEACH:
-      memcpy_P(color0, &black, 3);
-      memcpy_P(color1, &rose, 3);
-      memcpy_P(color2, &white, 3);
-      memcpy_P(color3, &yellow, 3);
-      break;
-    case MODE_MOJITO:
-      memcpy_P(color0, &black, 3);
-      memcpy_P(color1, &green, 3);
-      memcpy_P(color2, &cyan, 3);
-      memcpy_P(color3, &white, 3);
-      break; 
-    case MODE_SKYWLKR:
-      memcpy_P(color0, &black, 3);
-      memcpy_P(color1, &cyan, 3);
-      memcpy_P(color2, &white, 3);
-      memcpy_P(color3, &yellow, 3);
-      break;    
-    case MODE_CANDY:
-      memcpy_P(color0, &black, 3);
-      memcpy_P(color1, &rose, 3);
-      memcpy_P(color2, &magenta, 3);
-      memcpy_P(color3, &blue, 3);
-      break;       
-    case MODE_TMNT:
-      memcpy_P(color0, &black, 3);
-      memcpy_P(color1, &green, 3);
-      memcpy_P(color2, &yellow, 3);
-      memcpy_P(color3, &orange, 3);
-      break;    
     case MODE_CONST:
       memcpy_P(color0, &magenta, 3);
       memcpy_P(color1, &yellow, 3);
@@ -451,15 +461,24 @@ void serviceLightStateMachine() {
           dim = 255;
         }
 
-        uint32_t c = Wheel(((i * 256 / stripL.numPixels()) + j) & 255);
-        r = (uint8_t)(c >> 16);
-        g = (uint8_t)(c >>  8);
-        b = (uint8_t)c;
+
         
+        if (rainbowMode == true) {
+          uint32_t c = Wheel(((i * 256 / stripL.numPixels()) + j) & 255);
+          r = (uint8_t)(c >> 16);
+          g = (uint8_t)(c >>  8);
+          b = (uint8_t)c;
+        } else {
+          long c = ((i * 256 / stripL.numPixels()) + j) & 255;
+          r = rValue(max(abs(c - 127) * 6 + 127, 255)); // abs(c-127) makes things mirror
+          g = gValue(max(abs(c - 127) * 6 + 127, 255)); // *6 scales to the range of the xValue fxn
+          b = bValue(max(abs(c - 127) * 6 + 127, 255)); // +255 offsets to remove black, min to create more color1
+        } 
+
         r = (r * dim) >> 8;
         g = (g * dim) >> 8;
         b = (b * dim) >> 8;
-
+        
         stripL.setBrightness(LED_BRIGHTNESS >> 1);
         stripR.setBrightness(LED_BRIGHTNESS >> 1);
         stripL.setPixelColor(i, r, g, b);
