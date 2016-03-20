@@ -3,9 +3,9 @@
 // To switch between color modes, turn power on and off within 2 seconds
 // Each mode displays arbitrary user-defined colors
 
-#include "elapsedMillis_bs24.h"
 #include <Adafruit_NeoPixel.h>
 #include <EEPROM.h>
+#include <elapsedMillis.h>
 
 // List of program mode names. You can add new modes here. Modes are defined in function setPalette().
 typedef enum {MODE_MLPONY, MODE_BURN, MODE_WONKA, MODE_PRINPEACH, MODE_MOJITO, MODE_SKYWLKR, MODE_CANDY, MODE_TMNT, MODE_CONST, MODE_BLINK, MODE_RAINBOW} progmode;
@@ -82,8 +82,8 @@ const uint8_t PROGMEM rose[] = {255, 0, 200};
 Adafruit_NeoPixel stripL = Adafruit_NeoPixel(N_LEDS, LED_PIN_L, NEO_GRB + NEO_KHZ800);
 Adafruit_NeoPixel stripR = Adafruit_NeoPixel(N_LEDS, LED_PIN_R, NEO_GRB + NEO_KHZ800);
 
-elapsedMillis_bs24 timer;
-elapsedMillis_bs24 step_timer;
+elapsedMillis timer;
+elapsedMillis step_timer;
 
 extern const uint8_t PROGMEM gamma[]; // Gamma correction table for LED brightness (defined at end of code)
 extern const uint8_t PROGMEM SINES[]; // Fast 0-255 sine lookup table (defined at end of code)
