@@ -1,11 +1,10 @@
-
 // Code for Blinky Shoe v2.4
 // Inspired by 'Firewalker' code for Adafruit NeoPixels by Phillip Burgess
 // To switch between color modes, turn power on and off within 2 seconds
 // Each mode displays arbitrary user-defined colors
 
-#include "Adafruit_NeoPixel_bs24.h"
 #include "elapsedMillis_bs24.h"
+#include <Adafruit_NeoPixel.h>
 #include <EEPROM.h>
 
 // List of program mode names. You can add new modes here. Modes are defined in function setPalette().
@@ -80,8 +79,8 @@ const uint8_t PROGMEM rose[] = {255, 0, 200};
 #define SWITCH_MODES 1
 #define DONT_SWITCH_MODES 0
 
-Adafruit_NeoPixel_bs24 stripL = Adafruit_NeoPixel_bs24(N_LEDS, LED_PIN_L, NEO_GRB + NEO_KHZ800);
-Adafruit_NeoPixel_bs24 stripR = Adafruit_NeoPixel_bs24(N_LEDS, LED_PIN_R, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel stripL = Adafruit_NeoPixel(N_LEDS, LED_PIN_L, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel stripR = Adafruit_NeoPixel(N_LEDS, LED_PIN_R, NEO_GRB + NEO_KHZ800);
 
 elapsedMillis_bs24 timer;
 elapsedMillis_bs24 step_timer;
