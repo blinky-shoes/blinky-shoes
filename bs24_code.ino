@@ -29,7 +29,7 @@ const uint8_t PROGMEM chartreuse[] = {200,255,0};
 const uint8_t PROGMEM orange[] = {255,200,0};
 const uint8_t PROGMEM rose[] = {255,0,200};
 const uint8_t PROGMEM greg_purple[] = {150, 0, 204};
-const uint8_t PROGMEM greg_red[] = {192, 62, 35};
+const uint8_t PROGMEM greg_red[] = {219, 0, 88};
 const uint8_t PROGMEM greg_blue[] = {0, 168, 165};
 
 #define N_LEDS 21 // number of LEDs in left and right strips
