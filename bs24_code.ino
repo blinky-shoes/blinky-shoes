@@ -428,8 +428,8 @@ void serviceLightStateMachine() {
       break;
 
     case LIGHT_CONSTANT_RAINBOW:
-      stripL.setBrightness(LED_BRIGHTNESS >> 1);
-      stripR.setBrightness(LED_BRIGHTNESS >> 1);
+      stripL.setBrightness(LED_BRIGHTNESS);
+      stripR.setBrightness(LED_BRIGHTNESS);
       for(i=0; i<N_LEDS; i++) { // For each LED...
         c = Wheel(((i * 256 / stripL.numPixels()) + j) & 255);
         r = (uint8_t)(c >> 16);
@@ -443,8 +443,8 @@ void serviceLightStateMachine() {
 
     case LIGHT_BLINK_RAINBOW:
       if ((timer >> 8) % 2 == 0) {
-        stripL.setBrightness(LED_BRIGHTNESS >> 1);
-        stripR.setBrightness(LED_BRIGHTNESS >> 1);
+        stripL.setBrightness(LED_BRIGHTNESS);
+        stripR.setBrightness(LED_BRIGHTNESS);
       } else {
         stripL.setBrightness(0);
         stripR.setBrightness(0);
