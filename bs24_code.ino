@@ -8,11 +8,16 @@
 #include "elapsedMillis_bs24.h"
 #include <EEPROM.h>
 
-// List of program mode names. You can add new modes here. Modes are defined in function setPalette().
-typedef enum {MODE_MLPONY, MODE_BURN, MODE_WONKA, MODE_PRINPEACH, MODE_MOJITO, MODE_SKYWLKR, MODE_CANDY, MODE_TMNT, MODE_CONST, MODE_BLINK, MODE_RAINBOW} progmode;
-#define NUMBEROFMODES 11
+// List of program mode names. You can add new modes here. Modes are defined in function setupColorMode().
+typedef enum {MODE_USER, MODE_MLPONY, MODE_BURN, MODE_WONKA, MODE_PRINPEACH, MODE_MOJITO, MODE_SKYWLKR, MODE_CANDY, MODE_TMNT, MODE_CONST, MODE_BLINK, MODE_RAINBOW} progmode;
+#define NUMBEROFMODES 12
 
 // User-defined colors. Add more if desired
+const uint8_t PROGMEM user_color1[] = {150, 0, 204};
+const uint8_t PROGMEM user_color2[] = {219, 0, 88};
+const uint8_t PROGMEM user_color3[] = {0, 168, 165};
+
+// Colors used in standard modes
 const uint8_t PROGMEM black[] = {0, 0, 0};
 const uint8_t PROGMEM red[] = {255, 0, 0};
 const uint8_t PROGMEM green[] = {0, 255, 0};
@@ -130,56 +135,35 @@ const boolean GAME_OF_LIFE_EIGHTEEN[] = {false, true, false, false, true, false,
 progmode currentmode;
 
 // Define program modes here. Each mode specifies a palette of four colors.
-void setPalette() {
+void setupColorMode() {
   switch(currentmode) {
     default:
+    case MODE_USER:
+      setPalette(black, user_color1, user_color2, user_color3);
+      break;
     case MODE_MLPONY:
-      memcpy_P(color0, &black, 3);  // "darkest" color (use BLACK for fade-out)
-      memcpy_P(color1, &cyan, 3);  // "second-darkest" color
-      memcpy_P(color2, &yellow, 3); // "second-brightest" color
-      memcpy_P(color3, &magenta, 3); // "brightest" color
+      setPalette(black, cyan, yellow, magenta);
       break;
     case MODE_BURN:
-      memcpy_P(color0, &black, 3);
-      memcpy_P(color1, &red, 3);
-      memcpy_P(color2, &yellow, 3);
-      memcpy_P(color3, &white, 3);
+      setPalette(black, red, yellow, white);
       break;
     case MODE_WONKA:
-      memcpy_P(color0, &black, 3);
-      memcpy_P(color1, &violet, 3);
-      memcpy_P(color2, &green, 3);
-      memcpy_P(color3, &yellow, 3);
+      setPalette(black, violet, green, yellow);
       break;
     case MODE_PRINPEACH:
-      memcpy_P(color0, &black, 3);
-      memcpy_P(color1, &rose, 3);
-      memcpy_P(color2, &white, 3);
-      memcpy_P(color3, &yellow, 3);
+      setPalette(black, rose, white, yellow);
       break;
     case MODE_MOJITO:
-      memcpy_P(color0, &black, 3);
-      memcpy_P(color1, &green, 3);
-      memcpy_P(color2, &cyan, 3);
-      memcpy_P(color3, &white, 3);
+      setPalette(black, green, cyan, white);
       break; 
     case MODE_SKYWLKR:
-      memcpy_P(color0, &black, 3);
-      memcpy_P(color1, &cyan, 3);
-      memcpy_P(color2, &white, 3);
-      memcpy_P(color3, &yellow, 3);
+      setPalette(black, cyan, white, yellow);
       break;    
     case MODE_CANDY:
-      memcpy_P(color0, &black, 3);
-      memcpy_P(color1, &rose, 3);
-      memcpy_P(color2, &magenta, 3);
-      memcpy_P(color3, &blue, 3);
+      setPalette(black, rose, magenta, blue);
       break;
     case MODE_TMNT:
-      memcpy_P(color0, &black, 3);
-      memcpy_P(color1, &green, 3);
-      memcpy_P(color2, &yellow, 3);
-      memcpy_P(color3, &orange, 3);
+      setPalette(black, green, yellow, orange);
       break;
     case MODE_BLINK:
       mode_state = STATE_BLINK;
@@ -188,14 +172,17 @@ void setPalette() {
       mode_state = STATE_CONSTANT;
       break;
     case MODE_RAINBOW:
-      memcpy_P(color0, &black, 3);
-      memcpy_P(color1, &white, 3);
-      memcpy_P(color2, &black, 3);
-      memcpy_P(color3, &white, 3);
+      setPalette(black, white, black, white);
       break;
   }
 }
 
+void setPalette(const uint8_t c0[3], const uint8_t c1[3], const uint8_t c2[3], const uint8_t c3[3]) {
+  memcpy_P(color0, c0, 3);
+  memcpy_P(color1, c1, 3);
+  memcpy_P(color2, c2, 3);
+  memcpy_P(color3, c3, 3);
+}
 
 void setup() {
   uint8_t modevalue;
@@ -214,7 +201,7 @@ void setup() {
   currentmode = (progmode)modevalue;
 
   mode_state = STATE_ATTRACT;
-  setPalette();
+  setupColorMode();
   
   stripL.begin();
   stripR.begin();
@@ -247,7 +234,7 @@ void setup() {
   readAccel();
 }
 
-void loop() {  
+void loop() {
   if (modeSwitchTimeExceeded == false) {
     if (timer > MODE_SWITCH_TIME) { // if it has been a long enough time since the program started...
       modeSwitchTimeExceeded = true;
@@ -403,7 +390,7 @@ void serviceLightStateMachine() {
     case LIGHT_MAG_WAVES:
       stripL.setBrightness(LED_BRIGHTNESS);
       stripR.setBrightness(LED_BRIGHTNESS);
-      // Now the grayscale magnitude buffer is remapped to color for the LEDs. The colors are drawn from the color palette defined in the setPalette function.
+      // Now the grayscale magnitude buffer is remapped to color for the LEDs. The colors are drawn from the color palette defined in the setupColorMode function.
       for(i=0; i<N_LEDS; i++) { // For each LED...
         level = mag[i]; // Pixel magnitude (brightness)
 
