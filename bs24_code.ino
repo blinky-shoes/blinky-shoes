@@ -12,7 +12,7 @@
 typedef enum {MODE_USER, MODE_MLPONY, MODE_BURN, MODE_WONKA, MODE_PRINPEACH, MODE_MOJITO, MODE_SKYWLKR, MODE_CANDY, MODE_TMNT, MODE_CONST, MODE_BLINK, MODE_RAINBOW} progmode;
 #define NUMBEROFMODES 12
 
-// User-defined colors. Add more if desired
+// User-defined colors. Change these to change the "first" mode, which appears after the 3 rainbow modes.
 const uint8_t PROGMEM user_color1[] = {150, 0, 204};
 const uint8_t PROGMEM user_color2[] = {219, 0, 88};
 const uint8_t PROGMEM user_color3[] = {0, 168, 165};
