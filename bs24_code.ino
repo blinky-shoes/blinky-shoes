@@ -1,3 +1,4 @@
+// Includes several user modes and a "Game of Life" simulation
 
 // Code for Blinky Shoe v2.4
 // Inspired by 'Firewalker' code for Adafruit NeoPixels by Phillip Burgess
@@ -9,7 +10,7 @@
 #include <EEPROM.h>
 
 // List of program mode names. You can add new modes here. Modes are defined in function setupColorMode().
-typedef enum {MODE_USER, MODE_MLPONY, MODE_BURN, MODE_WONKA, MODE_PRINPEACH, MODE_MOJITO, MODE_SKYWLKR, MODE_CANDY, MODE_TMNT, MODE_CONST, MODE_BLINK, MODE_RAINBOW} progmode;
+typedef enum {MODE_USER, MODE_MLPONY, MODE_BURN, MODE_WONKA, MODE_PRINPEACH, MODE_MOJITO, MODE_SKYWLKR, MODE_CANDY, MODE_TMNT, MODE_RAINBOW, MODE_CONST, MODE_BLINK} progmode;
 #define NUMBEROFMODES 12
 
 // User-defined colors. Change these to change the "first" mode, which appears after the 3 rainbow modes.
@@ -39,9 +40,10 @@ const uint8_t PROGMEM rose[] = {255, 0, 200};
 #define TIMESTEP_MICROSECONDS 5000 // waiting time between animation steps and sensor readings
 #define BLINK_DELAY_MILLISECONDS 200 // waiting time between animation steps and sensor readings
 #define TIMESTEP_GAME_OF_LIFE 2500 // miliseconds between game of life ticks
+#define SCREENSAVER_TIME_MILLISECONDS 6000 // time before screensaver starts
 
-#define MODEADDRESS 300 // Byte address in EEPROM to use for the mode counter (0-1023).
-#define SWITCHADDRESS 101 // Byte address in EEPROM to use for the mode switch flag (0-1023).
+#define MODEADDRESS 500 // Byte address in EEPROM to use for the mode counter (0-1023).u
+#define SWITCHADDRESS 501 // Byte address in EEPROM to use for the mode switch flag (0-1023).
 #define MODE_SWITCH_TIME 2000 // Number of milliseconds before power cycle doesn't change modes
 #define DISPLAY_PALETTE_TIME 2000 // Number of milliseconds that the color palette is displayed
 
@@ -95,39 +97,39 @@ extern const uint8_t PROGMEM gamma[]; // Gamma correction table for LED brightne
 extern const uint8_t PROGMEM SINES[]; // Fast 0-255 sine lookup table (defined at end of code)
 
 int
-  stepMag[MAXSTEPS], // Magnitude of steps
-  stepX[MAXSTEPS], // Position of 'step wave' along strip
-  mag[N_LEDS], // Brightness buffer (one side of shoe)
-  light_state,
-  mode_state,
-  mode_state_next;
+stepMag[MAXSTEPS], // Magnitude of steps
+        stepX[MAXSTEPS], // Position of 'step wave' along strip
+        mag[N_LEDS], // Brightness buffer (one side of shoe)
+        light_state,
+        mode_state,
+        mode_state_next;
 
 uint8_t
-  triggerState = READY,
-  settlingCounter = 0,
-  stepNum = 0, // Current step number in stepMag/stepX tables
-  color0[3], // current color palette (R,G,B)
-  color1[3],
-  color2[3],
-  color3[3];
+triggerState = READY,
+settlingCounter = 0,
+stepNum = 0, // Current step number in stepMag/stepX tables
+color0[3], // current color palette (R,G,B)
+color1[3],
+color2[3],
+color3[3];
 
 boolean
-  modeSwitchTimeExceeded = false,
-  stepDir[MAXSTEPS];
+modeSwitchTimeExceeded = false,
+stepDir[MAXSTEPS];
 
 float
-  x, // current x-acceleration
-  y, // current y-acceleration
-  z, // current z-acceleration
-  xJerk, // change in x-acceleration
-  yJerk, // change in y-acceleration
-  zJerk, // change in z-acceleration
-  jerkMag, // sum of squares of xJerk, yJerk, and zJerk
-  maxJerk;
+x, // current x-acceleration
+y, // current y-acceleration
+z, // current z-acceleration
+xJerk, // change in x-acceleration
+yJerk, // change in y-acceleration
+zJerk, // change in z-acceleration
+jerkMag, // sum of squares of xJerk, yJerk, and zJerk
+maxJerk;
 
-unsigned long 
-  next_game_of_life_tick_time,
-  next_exit_walking_mode_time;
+unsigned long
+next_game_of_life_tick_time,
+next_exit_walking_mode_time;
 boolean game_of_life_state[N_LEDS];
 boolean game_of_life_state_old[N_LEDS];
 const boolean GAME_OF_LIFE_EIGHTEEN[] = {false, true, false, false, true, false, false, false};
@@ -136,7 +138,7 @@ progmode currentmode;
 
 // Define program modes here. Each mode specifies a palette of four colors.
 void setupColorMode() {
-  switch(currentmode) {
+  switch (currentmode) {
     default:
     case MODE_USER:
       setPalette(black, user_color1, user_color2, user_color3);
@@ -155,10 +157,10 @@ void setupColorMode() {
       break;
     case MODE_MOJITO:
       setPalette(black, green, cyan, white);
-      break; 
+      break;
     case MODE_SKYWLKR:
       setPalette(black, cyan, white, yellow);
-      break;    
+      break;
     case MODE_CANDY:
       setPalette(black, rose, magenta, blue);
       break;
@@ -172,7 +174,7 @@ void setupColorMode() {
       mode_state = STATE_CONSTANT;
       break;
     case MODE_RAINBOW:
-      setPalette(black, white, black, white);
+      //      setPalette(black, white, black, white);
       break;
   }
 }
@@ -190,19 +192,21 @@ void setup() {
 
   EEPROM.write(SWITCHADDRESS, SWITCH_MODES); // write to EEPROM so that we will switch modes next time (if power is interrupted before we change this)
   timer = 0; // when this counter reaches MODE_SWITCH_TIME, we will change the mode switch so that we don't switch modes
-  
+
   modevalue = EEPROM.read(MODEADDRESS); // read mode counter from EEPROM (non-volatile memory)
-    
+
   if (modevalue >= NUMBEROFMODES) modevalue = NUMBEROFMODES; // fix out-of-range mode counter (happens when the program is run for the first time)
   if (modeSwitch == SWITCH_MODES) {
     if (++modevalue >= NUMBEROFMODES) modevalue = 0; // increment the mode counter
-    EEPROM.write(MODEADDRESS, modevalue);  
+    EEPROM.write(MODEADDRESS, modevalue);
   }
   currentmode = (progmode)modevalue;
 
-  mode_state = STATE_ATTRACT;
+  //  mode_state = STATE_ATTRACT;
+  mode_state = STATE_WALKING;
+  next_exit_walking_mode_time = timer + SCREENSAVER_TIME_MILLISECONDS;
   setupColorMode();
-  
+
   stripL.begin();
   stripR.begin();
   memset(stepMag, 0, sizeof(stepMag));
@@ -223,13 +227,13 @@ void setup() {
   // If you don't set the analog reference to external, then AREF is connected to
   // the internal 5V voltage reference by default. This will cause a short circuit
   // anytime you do an analog read, potentially damaging the microcontroller.
-  analogReference(EXTERNAL); 
+  analogReference(EXTERNAL);
   pinMode(XACCEL_PIN, INPUT);
   pinMode(YACCEL_PIN, INPUT);
   pinMode(ZACCEL_PIN, INPUT);
 
   mode_state_next = mode_state;
-  resetGameOfLife();
+  //  resetGameOfLife();
   light_state = LIGHT_OFF;
   readAccel();
 }
@@ -245,22 +249,39 @@ void loop() {
   serviceModeStateMachine();
   serviceLightStateMachine();
 
-  delayMicroseconds(TIMESTEP_MICROSECONDS);  
+  delayMicroseconds(TIMESTEP_MICROSECONDS);
 }
 
 void displayPalette() { // All 4 colors for the current mode are displayed using this function.
   uint8_t r, g, b, i;
-  for (i=0; i<N_LEDS; i++) {
-    r = rValue(i*1000/N_LEDS);
-    g = gValue(i*1000/N_LEDS);
-    b = bValue(i*1000/N_LEDS);
-    stripL.setPixelColor(i, r, g, b);
-    stripR.setPixelColor(i, r, g, b);
+  if (currentmode == MODE_RAINBOW) {
+    for (i = 0; i < N_LEDS; i++) {
+      uint32_t c = Wheel(((i * 256 / stripL.numPixels()) + 0) & 255);
+      r = (uint8_t)(c >> 16);
+      g = (uint8_t)(c >>  8);
+      b = (uint8_t)c;
+
+      r = (r * min(i * 1000 / N_LEDS, 255)) >> 8;
+      g = (g * min(i * 1000 / N_LEDS >> 2, 255)) >> 8;
+      b = (b * min(i * 1000 / N_LEDS >> 2, 255)) >> 8;
+
+      stripL.setPixelColor(i, r, g, b);
+      stripR.setPixelColor(i, r, g, b);
+    }
+  } else {
+
+    for (i = 0; i < N_LEDS; i++) {
+      r = rValue(i * 1000 / N_LEDS);
+      g = gValue(i * 1000 / N_LEDS);
+      b = bValue(i * 1000 / N_LEDS);
+      stripL.setPixelColor(i, r, g, b);
+      stripR.setPixelColor(i, r, g, b);
+    }
   }
   stripL.show();
   stripR.show();
   delay(DISPLAY_PALETTE_TIME);
-  for(i=0; i<N_LEDS; i++) {
+  for (i = 0; i < N_LEDS; i++) {
     stripL.setPixelColor(i, 0, 0, 0);
     stripR.setPixelColor(i, 0, 0, 0);
   }
@@ -273,8 +294,8 @@ void stepCalculation() {
   int mx1, m;
 
   readAccel(); // read the acceleration and calculate the jerk
-  
-  switch(triggerState) { // depending on the trigger state, we have different behavior:
+
+  switch (triggerState) { // depending on the trigger state, we have different behavior:
     case READY:
       if ((jerkMag > TRIGGER_LEVEL) && (step_timer > MIN_STEP_TIME)) { // trigger a step if the jerk exceeds the trigger level and there is enough time since the last step.
         maxJerk = jerkMag; // keep a running tally of the maximum jerk encountered during this step.
@@ -289,7 +310,7 @@ void stepCalculation() {
       break; // if the jerk does not exceed the trigger level or there hasn't been enough time, do nothing.
     case TRIGGERED:
       mode_state_next = STATE_WALKING;
-      next_exit_walking_mode_time = timer + 10 * TIMESTEP_GAME_OF_LIFE;
+      next_exit_walking_mode_time = timer + SCREENSAVER_TIME_MILLISECONDS;
       if (jerkMag < RESET_LEVEL) { // if the jerk decreases below the reset level, begin settling.
         triggerState = SETTLING;
         break;
@@ -321,27 +342,27 @@ void stepCalculation() {
         break;
       }
       break;
-  } 
+  }
 
   // Render a 'brightness map' for all steps in flight. It's like a grayscale image; there's no color yet, just intensities.
   memset(mag, 0, sizeof(mag)); // Clear magnitude buffer
-  for(i=0; i<MAXSTEPS; i++) { // For each step...
-    if(stepMag[i] <= 0) continue; // Skip if inactive
-    for(j=0; j<N_LEDS; j++) { // For each LED...
+  for (i = 0; i < MAXSTEPS; i++) { // For each step...
+    if (stepMag[i] <= 0) continue; // Skip if inactive
+    for (j = 0; j < N_LEDS; j++) { // For each LED...
       // Each step has sort of a 'wave' that's part of the animation, moving from heel to toe if the direction is forward
       // and from toe to heel if the direction is backward. The wave position has sub-pixel resolution (4X), and is up to 80 units (20 pixels) long.
       mx1 = (j << 2) - stepX[i]; // Position of LED along wave
-      if((mx1 <= 0) || (mx1 >= 80)) continue; // Out of range
-      if(mx1 > 64) { // Rising edge of wave; ramp up fast (4 px)
+      if ((mx1 <= 0) || (mx1 >= 80)) continue; // Out of range
+      if (mx1 > 64) { // Rising edge of wave; ramp up fast (4 px)
         m = ((long)stepMag[i] * (long)(80 - mx1)) >> 4;
       } else { // Falling edge of wave; fade slow (16 px)
         m = ((long)stepMag[i] * (long)mx1) >> 6;
       }
-      if(stepDir[i] == FORWARD) mag[j] += m; // Add magnitude to buffered sum for forward step
-      if(stepDir[i] == BACKWARD) mag[N_LEDS-j-1] += m; // Add magnitude to buffered sum for backward step
+      if (stepDir[i] == FORWARD) mag[j] += m; // Add magnitude to buffered sum for forward step
+      if (stepDir[i] == BACKWARD) mag[N_LEDS - j - 1] += m; // Add magnitude to buffered sum for backward step
     }
     stepX[i]++; // Update position of step wave
-    if(stepX[i] >= (80 + (N_LEDS << 2)))
+    if (stepX[i] >= (80 + (N_LEDS << 2)))
       stepMag[i] = 0; // Off end; disable step wave
     else
       stepMag[i] = ((long)stepMag[i] * 127L) >> 7; // Fade
@@ -354,7 +375,7 @@ void serviceModeStateMachine() {
       stepCalculation();
       light_state = LIGHT_GAME_OF_LIFE;
       break;
-    
+
     case STATE_WALKING:
       stepCalculation();
       light_state = LIGHT_MAG_WAVES;
@@ -391,7 +412,7 @@ void serviceLightStateMachine() {
       stripL.setBrightness(LED_BRIGHTNESS);
       stripR.setBrightness(LED_BRIGHTNESS);
       // Now the grayscale magnitude buffer is remapped to color for the LEDs. The colors are drawn from the color palette defined in the setupColorMode function.
-      for(i=0; i<N_LEDS; i++) { // For each LED...
+      for (i = 0; i < N_LEDS; i++) { // For each LED...
         level = mag[i]; // Pixel magnitude (brightness)
 
         if (currentmode != MODE_RAINBOW) {
@@ -403,12 +424,12 @@ void serviceLightStateMachine() {
           r = (uint8_t)(c >> 16);
           g = (uint8_t)(c >>  8);
           b = (uint8_t)c;
-          
-          r = (r * min(mag[i] >> 2, 255)) >> 8;
-          g = (g * min(mag[i] >> 2, 255)) >> 8;
-          b = (b * min(mag[i] >> 2, 255)) >> 8;      
+
+          r = (r * min(mag[i] >> 1, 255)) >> 8;
+          g = (g * min(mag[i] >> 1, 255)) >> 8;
+          b = (b * min(mag[i] >> 1, 255)) >> 8;
         }
-        
+
         stripL.setPixelColor(i, r, g, b);
         stripR.setPixelColor(i, r, g, b);
       }
@@ -417,26 +438,26 @@ void serviceLightStateMachine() {
     case LIGHT_CONSTANT_RAINBOW:
       stripL.setBrightness(LED_BRIGHTNESS);
       stripR.setBrightness(LED_BRIGHTNESS);
-      for(i=0; i<N_LEDS; i++) { // For each LED...
+      for (i = 0; i < N_LEDS; i++) { // For each LED...
         c = Wheel(((i * 256 / stripL.numPixels()) + j) & 255);
         r = (uint8_t)(c >> 16);
         g = (uint8_t)(c >>  8);
         b = (uint8_t)c;
-  
+
         stripL.setPixelColor(i, r, g, b);
         stripR.setPixelColor(i, r, g, b);
       }
       break;
 
     case LIGHT_BLINK_RAINBOW:
-      if ((timer >> 8) % 2 == 0) {
+      if ((timer >> 8) % 2 == 0) { // This should be changed to implement defined BLINK_DELAY_MILLISECONDS
         stripL.setBrightness(LED_BRIGHTNESS);
         stripR.setBrightness(LED_BRIGHTNESS);
       } else {
         stripL.setBrightness(0);
         stripR.setBrightness(0);
       }
-      for(i=0; i<N_LEDS; i++) { // For each LED...
+      for (i = 0; i < N_LEDS; i++) { // For each LED...
         c = Wheel(((i * 256 / stripL.numPixels()) + j) & 255);
         r = (uint8_t)(c >> 16);
         g = (uint8_t)(c >>  8);
@@ -446,19 +467,19 @@ void serviceLightStateMachine() {
         stripR.setPixelColor(i, r, g, b);
       }
       break;
-    
+
     case LIGHT_OFF:
-      for(i=0; i<N_LEDS; i++) {
+      for (i = 0; i < N_LEDS; i++) {
         stripL.setPixelColor(i, 0, 0, 0);
         stripR.setPixelColor(i, 0, 0, 0);
       }
       break;
-           
+
     case LIGHT_GAME_OF_LIFE:
       serviceGameOfLife();
       float pct_remaining_in_step = ((float) min((unsigned long) next_game_of_life_tick_time - timer, TIMESTEP_GAME_OF_LIFE)) / TIMESTEP_GAME_OF_LIFE;
 
-      for(i=0; i<N_LEDS; i++) {
+      for (i = 0; i < N_LEDS; i++) {
         if (game_of_life_state_old[i] && !game_of_life_state[i]) {
           // * 127 to only scale through half the sine cycle
           // + 64 offset to get a cosine that starts from 1 instead of a sine from 0
@@ -481,12 +502,12 @@ void serviceLightStateMachine() {
           r = rValue(max(abs(c - 127) * 6 + 127, 255)); // abs(c-127) makes things mirror
           g = gValue(max(abs(c - 127) * 6 + 127, 255)); // *6 scales to the range of the xValue fxn
           b = bValue(max(abs(c - 127) * 6 + 127, 255)); // +255 offsets to remove black, min to create more color1
-        } 
+        }
 
         r = (r * dim) >> 8;
         g = (g * dim) >> 8;
         b = (b * dim) >> 8;
-        
+
         stripL.setBrightness(LED_BRIGHTNESS >> 1);
         stripR.setBrightness(LED_BRIGHTNESS >> 1);
         stripL.setPixelColor(i, r, g, b);
@@ -494,7 +515,7 @@ void serviceLightStateMachine() {
       }
       break;
   }
-  
+
   stripL.show();
   stripR.show();
 }
@@ -503,7 +524,7 @@ void resetGameOfLife() {
   next_game_of_life_tick_time = timer + TIMESTEP_GAME_OF_LIFE;
   for (int i = 0; i < N_LEDS; i = i + 1) {
     game_of_life_state_old[i] = false;
-    game_of_life_state[i] = (random(0,6) < 1);
+    game_of_life_state[i] = (random(0, 6) < 1);
   }
 }
 
@@ -514,17 +535,17 @@ void serviceGameOfLife() {
     memcpy(game_of_life_state_old, game_of_life_state, sizeof(game_of_life_state_old));
 
     game_of_life_state[0] = GAME_OF_LIFE_EIGHTEEN[
-        (game_of_life_state_old[1] << 1) +
-        game_of_life_state_old[2]];
+                              (game_of_life_state_old[1] << 1) +
+                              game_of_life_state_old[2]];
     for (int i = 1; i < N_LEDS - 1; i = i + 1) {
       game_of_life_state[i] = GAME_OF_LIFE_EIGHTEEN[
-        (game_of_life_state_old[i-1] << 2) +
-        (game_of_life_state_old[i] << 1) +
-        game_of_life_state_old[i+1]];
+                                (game_of_life_state_old[i - 1] << 2) +
+                                (game_of_life_state_old[i] << 1) +
+                                game_of_life_state_old[i + 1]];
     }
     game_of_life_state[N_LEDS - 1] = GAME_OF_LIFE_EIGHTEEN[
-        (game_of_life_state_old[N_LEDS - 2] << 2) +
-        (game_of_life_state_old[N_LEDS - 1] << 1)];
+                                       (game_of_life_state_old[N_LEDS - 2] << 2) +
+                                       (game_of_life_state_old[N_LEDS - 1] << 1)];
   }
 }
 
@@ -535,11 +556,11 @@ void readAccel() { // helper function to read the accelerometer and calculate th
   float xOld = x;
   float yOld = y;
   float zOld = z;
-  
+
   x = ((float)xint) / 1024 * V_REF * G_PER_V;
   y = ((float)yint) / 1024 * V_REF * G_PER_V;
   z = ((float)zint) / 1024 * V_REF * G_PER_V;
-   
+
   xJerk = x - xOld;
   yJerk = y - yOld;
   zJerk = z - zOld;
@@ -554,14 +575,14 @@ long getMag(float jerk) { // this turns a jerk value into a pixel magnitude usin
 // Input a value 0 to 255 to get a color value.
 // The colours are a transition r - g - b - back to r.
 uint32_t Wheel(byte WheelPos) {
-  if(WheelPos < 85) {
-   return stripL.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
-  } else if(WheelPos < 170) {
-   WheelPos -= 85;
-   return stripL.Color(255 - WheelPos * 3, 0, WheelPos * 3);
+  if (WheelPos < 85) {
+    return stripL.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
+  } else if (WheelPos < 170) {
+    WheelPos -= 85;
+    return stripL.Color(255 - WheelPos * 3, 0, WheelPos * 3);
   } else {
-   WheelPos -= 170;
-   return stripL.Color(0, WheelPos * 3, 255 - WheelPos * 3);
+    WheelPos -= 170;
+    return stripL.Color(0, WheelPos * 3, 255 - WheelPos * 3);
   }
 }
 
@@ -634,18 +655,18 @@ const uint8_t PROGMEM gamma[] = { // gamma correction table
 };
 
 const uint8_t PROGMEM SINES[] = {
-  127, 130, 133, 136, 139, 142, 145, 148, 151, 154, 157, 161, 164, 166, 169, 172, 175, 
-  178, 181, 184, 187, 189, 192, 195, 197, 200, 202, 205, 207, 210, 212, 214, 217, 219, 
-  221, 223, 225, 227, 229, 231, 232, 234, 236, 237, 239, 240, 242, 243, 244, 245, 246, 
-  247, 248, 249, 250, 251, 251, 252, 252, 253, 253, 253, 253, 253, 253, 253, 253, 253, 
-  253, 252, 252, 251, 251, 250, 249, 249, 248, 247, 246, 245, 243, 242, 241, 239, 238, 
-  236, 235, 233, 231, 230, 228, 226, 224, 222, 220, 218, 215, 213, 211, 209, 206, 204, 
-  201, 199, 196, 193, 191, 188, 185, 182, 180, 177, 174, 171, 168, 165, 162, 159, 156, 
-  153, 150, 147, 144, 141, 137, 134, 131, 128, 126, 123, 120, 117, 113, 110, 107, 104, 
-  101, 98, 95, 92, 89, 86, 83, 80, 77, 74, 72, 69, 66, 63, 61, 58, 55, 53, 50, 48, 45, 
-  43, 41, 39, 36, 34, 32, 30, 28, 26, 24, 23, 21, 19, 18, 16, 15, 13, 12, 11, 9, 8, 7, 
-  6, 5, 5, 4, 3, 3, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 3, 4, 5, 6, 7, 8, 9, 
-  10, 11, 12, 14, 15, 17, 18, 20, 22, 23, 25, 27, 29, 31, 33, 35, 37, 40, 42, 44, 47, 
-  49, 52, 54, 57, 59, 62, 65, 67, 70, 73, 76, 79, 82, 85, 88, 90, 93, 97, 100, 103, 
-  106, 109, 112, 115, 118, 121, 124, 127};
-
+  127, 130, 133, 136, 139, 142, 145, 148, 151, 154, 157, 161, 164, 166, 169, 172, 175,
+  178, 181, 184, 187, 189, 192, 195, 197, 200, 202, 205, 207, 210, 212, 214, 217, 219,
+  221, 223, 225, 227, 229, 231, 232, 234, 236, 237, 239, 240, 242, 243, 244, 245, 246,
+  247, 248, 249, 250, 251, 251, 252, 252, 253, 253, 253, 253, 253, 253, 253, 253, 253,
+  253, 252, 252, 251, 251, 250, 249, 249, 248, 247, 246, 245, 243, 242, 241, 239, 238,
+  236, 235, 233, 231, 230, 228, 226, 224, 222, 220, 218, 215, 213, 211, 209, 206, 204,
+  201, 199, 196, 193, 191, 188, 185, 182, 180, 177, 174, 171, 168, 165, 162, 159, 156,
+  153, 150, 147, 144, 141, 137, 134, 131, 128, 126, 123, 120, 117, 113, 110, 107, 104,
+  101, 98, 95, 92, 89, 86, 83, 80, 77, 74, 72, 69, 66, 63, 61, 58, 55, 53, 50, 48, 45,
+  43, 41, 39, 36, 34, 32, 30, 28, 26, 24, 23, 21, 19, 18, 16, 15, 13, 12, 11, 9, 8, 7,
+  6, 5, 5, 4, 3, 3, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 3, 4, 5, 6, 7, 8, 9,
+  10, 11, 12, 14, 15, 17, 18, 20, 22, 23, 25, 27, 29, 31, 33, 35, 37, 40, 42, 44, 47,
+  49, 52, 54, 57, 59, 62, 65, 67, 70, 73, 76, 79, 82, 85, 88, 90, 93, 97, 100, 103,
+  106, 109, 112, 115, 118, 121, 124, 127
+};
