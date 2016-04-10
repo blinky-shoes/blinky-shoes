@@ -9,7 +9,7 @@ Inspired by the [Firewalker](https://learn.adafruit.com/firewalker-led-sneakers/
 To get going with the blinky.shoes software, you need to set up the Arduino Integrated Development Environment on your computer. This will let you modify the code and upload it to your blinky.shoes. You can set this up by following the instructions at https://www.arduino.cc/en/Guide/HomePage
 
 ## Install Arduino Libraries
-We use the *Adafruit *Neopixel library to make the LEDs go, and the *elapsedMilis* library to keep track of time. You can use the Arduino Library Manager to install these libraries by following the instructions at https://www.arduino.cc/en/Guide/Libraries
+We use the *Adafruit *Neopixel library to make the LEDs go, and the *elapsedMillis* library to keep track of time. You can use the Arduino Library Manager to install these libraries by following the instructions at https://www.arduino.cc/en/Guide/Libraries
 
 ## Upload Software to blinky.shoes
 Once you're set up with the Arduino environment, you can test things are working by uploading this program unmodified to your blinky.shoes. Download this code ("Arduino Sketch") to your computer, then follow the instructions at https://www.arduino.cc/en/main/howto to open the sketch and upload it to your shoes with a USB cable.
